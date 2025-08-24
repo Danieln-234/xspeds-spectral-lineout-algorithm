@@ -4,7 +4,9 @@
 
 #X-ray Single-Photon Energy-Dispersive Spectroscopy
 
-See paper 'XSPEDS' for details and background. This is my first ever project, and first proper-ish use of Python - please don't judge
+See paper 'XSPEDS' for details and background. This is my first ever project, and first proper-ish use of Python - please don't judge.
+If I had the chance to do this project again, many things would've been done differently, especially the use of jupyter nb, but hey we all start somewhere. I'll probably remove this repository if/when I do better projects
+
 ## Overview
 This repository implements XSPEDS to get a spectral lineout of L shell emission of Germanium. This is in the X-ray regime.
 It achieves this by combining single-photon-counting with Bragg spectroscopy mapping.
