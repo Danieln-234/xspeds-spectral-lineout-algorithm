@@ -10,7 +10,7 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a **counts‑p
 
 
 
-## Summary
+## Quick Overview
 
 - **Input:** HDF5 stack of 2048×2048 CCD frames (Princeton FrameV2 layout). The first 3 columns are dropped to remove edge artefacts.  
 - **Output:** Energy spectrum (counts/eV) and a figure with Wiener‑smoothed error bands.  
