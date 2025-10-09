@@ -8,20 +8,20 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a **counts‑p
 
 
 
----
 
-## TL;DR
+
+## Summary
 
 - **Input:** HDF5 stack of 2048×2048 CCD frames (Princeton FrameV2 layout). The first 3 columns are dropped to remove edge artefacts.  
 - **Output:** Energy spectrum (counts/eV) and a figure with Wiener‑smoothed error bands.  
 - **Core idea:** Use two known lines (e.g., Ge Lα ≈ 1188 eV and Lβ ≈ 1218.5 eV) to fit instrument geometry; generate iso‑energy conics on the CCD; sum photon hits along those conics and normalize by local dispersion (eV per pixel).
 
----
 
 
 
 
-**Minimal requirements:**
+
+**Requirements:**
 - `numpy`, `scipy`, `h5py`, `matplotlib`
 - If you plot spectra: `matplotlib`
 - If you keep Wiener filtering: `scipy.signal` (part of SciPy)
@@ -30,7 +30,7 @@ NOte to self: add requirements file
 
 
 
----
+
 
 ## Data expectations
 
