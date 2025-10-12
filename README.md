@@ -46,7 +46,7 @@ NOte to self: add requirements file
 
 
 
-### Key knobs (edit in `CONFIG`)
+### Key knobs
 
 - **Input**: `INPUT_FILE`
 - **Logging**: `LOG_LEVEL`
