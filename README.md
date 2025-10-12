@@ -87,7 +87,6 @@ Note to self- mention where these configs affect
 | Key | Meaning | Typical impact |
 |---|---|---|
 | `ROW_BATCH_SIZE` | Rows per pedestal/threshold fit | Larger → smoother thresholds; smaller → more local adaptation |
-
 | `MAP_ALPHA1_DEG`, `MAP_ALPHA2_DEG` | Known half‑angles (90° − Bragg angle) | Encodes physics link to energy; ensure consistency with chosen lines |
 | `E_STEP` | Energy grid step | Smaller → finer spectrum (slower). Paper uses 0.1 eV |
 | `TOLERANCE_PX` | Lateral half‑width around each conic | Tune for best SNR without FWHM inflation (±2 px is a solid default) |
