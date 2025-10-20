@@ -1,6 +1,6 @@
 # XSPEDS: X‑ray Single‑Photon Energy‑Dispersive Spectroscopy
 
-End‑to‑end pipeline for converting raw CCD frames (HDF5) into a **counts‑per‑eV** spectrum using:
+End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per‑eV spectrum using:
 
 1) Dynamic single‑photon cleaning & clustering,  
 2) Geometric mapping from CCD pixels to energy via Bragg‑derived iso‑energy conics, and  
@@ -39,7 +39,7 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a **counts‑p
     Princeton::FrameV2/SxrEndstation.0:Princeton.0/data
   ```
 - Each “CalibCycle” provides a 2048×2048 frame (the loader collects all cycles into a stack).
-- On load, the **first 3 columns are dropped** (dataset‑specific spike/edge artefacts).
+- On load, the first 3 columns are dropped (dataset‑specific spike/edge artefacts).
 
 ---
 
