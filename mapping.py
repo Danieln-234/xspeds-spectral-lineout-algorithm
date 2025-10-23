@@ -170,7 +170,7 @@ def rotated_basis(theta_z: float, theta_x: float = 0.0, theta_y: float = 0.0) ->
     return (R @ e_i0).astype(np.float64), (R @ e_j0).astype(np.float64)
 
 
-def CONICPARAM(alpha: float, d: float, e_i: NDArray[np.float64], e_j: NDArray[np.float64], *, tol: float = 1e-6) -> Dict[str, Any]:
+def compute_conic_params(alpha: float, d: float, e_i: NDArray[np.float64], e_j: NDArray[np.float64], *, tol: float = 1e-6) -> Dict[str, Any]:
     """
     'Compute conic-section parameters induced by geometry (Appendix B).'
 
@@ -286,8 +286,8 @@ def residuals(
     """
     A1, A2, b, C1, C2, d, theta_z = p
     e_i, e_j = rotated_basis(theta_z, 0.0, 0.0)
-    cone1 = CONICPARAM(alpha1, d, e_i, e_j)
-    cone2 = CONICPARAM(alpha2, d, e_i, e_j)
+    cone1 = compute_conic_params(alpha1, d, e_i, e_j)
+    cone2 = compute_conic_params(alpha2, d, e_i, e_j)
 
     x1_pred = A1 * (y1 - b) ** 2 + C1
     x2_pred = A2 * (y2 - b) ** 2 + C2
@@ -376,8 +376,8 @@ def run_mapping(image_data: Sequence[NDArray[np.float64]], *, config: MappingCon
 
     p1_fit, p2_fit = 1.0 / (4.0 * A1), 1.0 / (4.0 * A2)
     e_i_opt, e_j_opt = rotated_basis(theta_z_opt, 0.0, 0.0)
-    cone1 = CONICPARAM(alpha1, d_opt, e_i_opt, e_j_opt)
-    cone2 = CONICPARAM(alpha2, d_opt, e_i_opt, e_j_opt)
+    cone1 = compute_conic_params(alpha1, d_opt, e_i_opt, e_j_opt)
+    cone2 = compute_conic_params(alpha2, d_opt, e_i_opt, e_j_opt)
     shift_part_1 = float(cone1["vertex"][0])
 
     logger.info(
@@ -391,14 +391,27 @@ def run_mapping(image_data: Sequence[NDArray[np.float64]], *, config: MappingCon
     # Residual norms for quick health check
     res_all = residuals(lsq.x, y1, x1, y2, x2, alpha1, alpha2, w_focal=cfg.w_focal, w_vertex=cfg.w_vertex)
     n1, n2 = len(y1), len(y2)
-    logger.info(
-        f"Residual norms: r1={np.linalg.norm(res_all[:n1]):.6g}, "
-        f"r2={np.linalg.norm(res_all[n1:n1+n2]):.6g}, "
-        f"focal={np.linalg.norm(res_all[n1+n2:n1+n2+2]):.6g}, "
-        f"vertex={np.linalg.norm(res_all[-1:]):.6g}"
+
+    r1_norm, r2_norm, focal_norm, vertex_norm = (
+        np.linalg.norm(res_all[:n1]),
+        np.linalg.norm(res_all[n1:n1+n2]),
+        np.linalg.norm(res_all[n1+n2:n1+n2+2]),
+        np.linalg.norm(res_all[-1:]),
     )
+
+    logger.info(
+        f"Residual norms: r1={r1_norm:.6g}, r2={r2_norm:.6g}, "
+        f"focal={focal_norm:.6g}, vertex={vertex_norm:.6g}"
+    )
+
 
     return MappingResult(d_opt, theta_z_opt, C1_opt, b_opt, shift_part_1,
                          focal_fit=(p1_fit, p2_fit),
                          focal_theory=(cone1['focal_length'], cone2['focal_length']),
-                         residual_norms={'r1_data':..., 'r2_data':..., 'focal':..., 'vertex':...})
+                         residual_norms={
+                                "r1_data": float(r1_norm),
+                                "r2_data": float(r2_norm),
+                                "focal": float(focal_norm),
+                                "vertex": float(vertex_norm),
+                            }
+                         )
