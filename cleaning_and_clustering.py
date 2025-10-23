@@ -17,10 +17,6 @@ scrub = ScrubConfig(row_batch_size=5, k_low=1.0, k_high=5.0)
 result = run_cleaning_and_clustering(stack, scrub=scrub)
 photon_maps, clusters = result.as_tuple()
 
-Notes
------
-- This module is intentionally self-contained for portfolio/review purposes.
-- See ScrubConfig for all tunable parameters.
 """
 
 from __future__ import annotations
@@ -34,13 +30,13 @@ from numpy.typing import NDArray
 from scipy.optimize import curve_fit
 
 
-# ------------------------------- Public types -------------------------------
+#  Public types
 
 Shape = Literal["single", "line2", "line3", "lshape3", "box4", "other"]
 ClustersDict = Dict[int, Dict[str, object]]  # cluster_no -> cluster info
 
 
-# ------------------------------- Configuration ------------------------------
+#  Configuration 
 
 @dataclass(frozen=True)
 class ScrubConfig:
@@ -84,8 +80,9 @@ class ClusteringResult:
         """Back-compat: return exactly what the old code expects."""
         return self.photon_maps, self.clusters
 
-
-# ------------------------------- Utilities ----------------------------------
+#############################
+#        Utilities          #
+#############################
 
 def _scotts_rule_bins(batch: NDArray[np.float64], *, min_bins: int, max_bins: int) -> int:
     """
