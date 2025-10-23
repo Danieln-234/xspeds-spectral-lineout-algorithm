@@ -19,7 +19,9 @@ if not logger.handlers:
     logger.addHandler(logging.NullHandler())
 
 
-# ------------------------------ Dataclasses ---------------------------------
+###################################
+#      Configuration objects      #
+###################################
 
 @dataclass(frozen=True)
 class MappingConfig:
@@ -71,8 +73,9 @@ class MappingResult:
     def as_tuple(self):
         return (self.d, self.theta_z, self.C1, self.b, self.shift)
 
-
-# ----------------------------- Peak finding ---------------------------------
+###############################
+#        Peak finding         #
+###############################
 
 def find_scatter_peaks(
     array_dat: NDArray[np.float64],
@@ -139,8 +142,9 @@ def find_scatter_peaks(
     logger.info(f"Scatter peaks found for {len(df)} batches.")
     return df
 
-
-# ------------------------------ Conic model ---------------------------------
+########################
+#     Conic model      #
+########################
 
 def rotated_basis(theta_z: float, theta_x: float = 0.0, theta_y: float = 0.0) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     """
@@ -251,7 +255,7 @@ def CONICPARAM(alpha: float, d: float, e_i: NDArray[np.float64], e_j: NDArray[np
     return dict(type="hyperbola", center=center, semi_axes=(float(a), float(b)), angle=ang, foci=(focus1, focus2), vertex=vertex1, focal_length=float(fl), coeffs=coeffs, discriminant=float(disc))
 
 
-# ------------------------------- Residuals ----------------------------------
+# Residuals 
 
 def residuals(
     p: NDArray[np.float64],
@@ -303,7 +307,7 @@ def residuals(
     return np.concatenate([res_data1, res_data2, w_focal * res_focal, w_vertex * res_vertex])
 
 
-# ------------------------------- Top level ----------------------------------
+# Top level 
 
 def run_mapping(image_data: Sequence[NDArray[np.float64]], *, config: MappingConfig | None = None) -> MappingResult:
     """

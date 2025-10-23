@@ -71,14 +71,14 @@ class ScrubConfig:
     fallback_sigma_k: float = 3.0
     min_bins: int = 16
     max_bins: int = 256
-    other_flag_threshold: float = 90.0  # promoted from hardcoded magic number
+    other_flag_threshold: float = 90.0  
 
 
 @dataclass(frozen=True)
 class ClusteringResult:
     """Outputs of cleaning + clustering."""
     photon_maps: List[NDArray[np.int_]]   # list of (H, W)
-    clusters: List[ClustersDict]          # list of dicts (as you return now)
+    clusters: List[ClustersDict]          # list of dicts
 
     def as_tuple(self):
         """Back-compat: return exactly what the old code expects."""
@@ -113,8 +113,9 @@ def _gauss(x: NDArray[np.float64], amp: float, mu: float, sigma: float) -> NDArr
     sigma = abs(float(sigma)) + 1e-12  # guard against negative / zero
     return amp * np.exp(-((x - mu) ** 2) / (2.0 * sigma * sigma))
 
-
-# ------------------------- Cleaning / Scrubbing ------------------------------
+#####################################
+#       Cleaning / Scrubbing        #
+#####################################
 
 def scrubbing(
     image_data: Sequence[NDArray[np.float64]],
@@ -206,8 +207,9 @@ def scrubbing(
 
     return scrubbed_frames
 
-
-# ------------------------------ Clustering ----------------------------------
+##########################
+#      Clustering        #
+##########################
 
 # Canonical shape templates (in local coords anchored at min(r), min(c))
 SINGLE = [{(0, 0)}]
@@ -342,7 +344,7 @@ cluster_detecting = detect_clusters
 
 
 ##################################
-#            Run                 #
+#              Run               #
 ##################################
 
 def run_cleaning_and_clustering(

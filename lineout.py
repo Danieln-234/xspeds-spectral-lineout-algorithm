@@ -21,11 +21,8 @@ import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
 
-# Optional smoothing
-try:
-    from scipy.signal import wiener  # Wiener filter for denoising the 1D spectrum
-except Exception:  # pragma: no cover
-    wiener = None
+from scipy.signal import wiener  # Wiener filter for denoising the 1D spectrum
+
 
 # Optional plotting
 try:
@@ -37,9 +34,9 @@ logger = logging.getLogger("xspeds.lineout")
 if not logger.handlers:
     logger.addHandler(logging.NullHandler())
 
-# --------------------------------------------------------------------------- #
-# Configuration objects
-# --------------------------------------------------------------------------- #
+###################################
+#      Configuration objects      #
+###################################
 
 @dataclass(frozen=True)
 class LineoutConfig:
@@ -64,7 +61,7 @@ class LineoutConfig:
         error_band_k   : Multiplier for ±k·σ shading (e.g., 2 for ±2σ).
         yscale         : "linear" or "log".
     """
-    # --- physics/grid ---
+    #  physics/grid 
     two_d_crystal: float = 15.96
     energy_min: float = 1100.0
     energy_max: float = 1604.0
@@ -78,7 +75,7 @@ class LineoutConfig:
     x_max: int | None = None
     hyperbola_branch: Literal["positive", "negative"] = "positive"
 
-    # --- plotting/smoothing ---
+    # plotting/smoothing
     plot: bool = True
     plot_mode: Literal["raw", "smoothed", "both"] = "smoothed"
     wiener_mysize: int | None = 30  # ~neighborhood length in bins; tune to FWHM (see paper)
@@ -127,9 +124,9 @@ class LineoutResult:
             self.sigma_intensity,
         )
 
-# --------------------------------------------------------------------------- #
-# Geometry helpers (unchanged in spirit; kept explicit and commented)
-# --------------------------------------------------------------------------- #
+##################################
+#      Geometry helpers          # 
+##################################
 
 def _rotated_basis(theta_z: float, theta_x: float = 0.0, theta_y: float = 0.0) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     """
@@ -300,9 +297,9 @@ def isoenergy_curves(
     shift = (-shift_part_1 + C1_opt, b_opt)
     return _conic_with_shift(alpha_rad, d, e_i, e_j, shift=shift)
 
-# --------------------------------------------------------------------------- #
-# Curve-integration (row-wise sampling around each conic)
-# --------------------------------------------------------------------------- #
+###############################################################################
+#       Curve-integration (row-wise sampling around each conic)               #
+###############################################################################
 
 def sum_along_ellipse_by_row(
     grid: NDArray[np.float64],
@@ -431,9 +428,10 @@ def sum_along_conic(
         grid, vertex, a_coeff, x_min=x_min, x_max=xmax, tolerance=tolerance, num_points=num_points
     )
 
-# --------------------------------------------------------------------------- #
-# Lineout driver
-# --------------------------------------------------------------------------- #
+########################
+#       Lineout        #
+########################
+
 
 def run_lineout(
     photon_map_all: Sequence[NDArray[np.int_]],
