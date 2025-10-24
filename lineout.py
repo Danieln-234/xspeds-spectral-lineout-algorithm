@@ -20,6 +20,8 @@ from typing import Dict, Literal, Sequence, Tuple
 import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
+from pybaselines import morphological
+from scipy.optimize import curve_fit
 
 from scipy.signal import wiener  # Wiener filter for denoising the 1D spectrum
 
@@ -55,8 +57,7 @@ class LineoutConfig:
 
     Plotting & smoothing:
         plot           : Whether to generate a Matplotlib plot.
-        plot_mode      : "raw" | "smoothed" | "both".
-        wiener_mysize  : Neighborhood length for scipy.signal.wiener (int).  None→off.
+        wiener_mysize  : Neighborhood length for scipy.signal.wiener (int).
                          (A value comparable to the FWHM in bins is typical.)
         error_band_k   : Multiplier for ±k·σ shading (e.g., 2 for ±2σ).
         yscale         : "linear" or "log".
@@ -77,7 +78,6 @@ class LineoutConfig:
 
     # plotting/smoothing
     plot: bool = True
-    plot_mode: Literal["raw", "smoothed", "both"] = "smoothed"
     wiener_mysize: int | None = 30  # ~neighborhood length in bins; tune to FWHM (see paper)
     error_band_k: float = 2.0
     yscale: Literal["linear", "log"] = "linear"
@@ -521,9 +521,9 @@ def run_lineout(
     # Propagate Poisson shot noise: σ_counts = √N  →  σ_intensity = √N / W
     sigma_intensity = np.sqrt(np.maximum(raw_sums, 0.0)) / windows_safe
 
-    # Optional Wiener smoothing of the intensity for display (not used to compute σ)
+    # Optional Wiener smoothing of the intensity for display of the error bands (used to compute σ)
     smoothed = None
-    if cfg.wiener_mysize and wiener is not None:
+    if cfg.wiener_mysize is not None:
         # SciPy Wiener operates on the 1D array with a given neighborhood length.
         # Choose mysize ≈ FWHM (in bins) for gentle denoising without peak bias (report Sec. 2.4).
         ms = int(max(3, cfg.wiener_mysize))
@@ -536,21 +536,21 @@ def run_lineout(
     )
 
     # Plot
-    if cfg.plot and plt is not None:
+    if cfg.plot:
+        plt.ion()
         plt.figure(figsize=(8, 5))
-        # Decide which traces to draw
-        if cfg.plot_mode in ("raw", "both"):
-            plt.plot(energies, intensity, "-", linewidth=1, label="Intensity (counts/eV)")
-        if cfg.plot_mode in ("smoothed", "both") and smoothed is not None:
-            plt.plot(energies, smoothed, "-", linewidth=1, label="Spectral Linout")
 
-        # Error band around the *smoothed* curve if present, else the raw curve
-        ref = smoothed if (smoothed is not None and cfg.plot_mode != "raw") else intensity
+        # plot the raw intensity spectrum 
+        plt.plot(energies, intensity, "-", linewidth=1.0, label="Intensity (raw, counts/eV)")
+
+        # Poisson error band centered on the smoothed curve if available 
+        ref_for_band = smoothed
         k = float(cfg.error_band_k)
-        upper = ref + k * sigma_intensity
-        lower = ref - k * sigma_intensity
+        upper = ref_for_band + k * sigma_intensity
+        lower = ref_for_band - k * sigma_intensity
         plt.fill_between(energies, lower, upper, alpha=0.2, label=f"±{k:.0f}σ (Poisson)")
 
+        # Axis labels, style, etc. 
         plt.xlabel("Energy (eV)")
         plt.ylabel("Counts per eV")
         plt.title("Spectral Lineout")
@@ -569,3 +569,61 @@ def run_lineout(
         smoothed=smoothed,
         sigma_intensity=sigma_intensity,
     )
+
+#######################################
+#        Further lineout analysis     #
+#######################################
+def compute_peak_metrics(
+    energies: NDArray[np.float64],
+    intensity: NDArray[np.float64],
+    *,
+    peak_window: tuple[float, float] = (1180.0, 1196.0),
+    mor_half_window: int = 30,
+    mor_smooth_hw: int = 30,
+    gauss_limit_fwhm: float = 1.5
+) -> dict:
+    """
+    Baseline-correct around a target peak, fit a Gaussian, and estimate SNR.
+    Returns dict: A, mu, sigma, FWHM, C, background_level, noise, peak_signal, SNR, baseline_corrected.
+    """
+    x = np.asarray(energies, dtype=np.float64)
+    y = np.asarray(intensity, dtype=np.float64)
+
+    # morphological baseline (MOR)
+    baseline, _ = morphological.mor(
+        y, half_window=mor_half_window, smooth_half_window=mor_smooth_hw
+    )
+    y_corr = y - baseline
+
+    # fit Gaussian within the peak window
+    lo, hi = peak_window
+    m = (x > lo) & (x < hi)
+    x_fit, y_fit = x[m], y_corr[m]
+    if x_fit.size < 5:
+        raise ValueError("Not enough points in peak_window to fit a Gaussian.")
+
+    def gaussian(xv, A, mu, sigma, C):
+        return A * np.exp(-0.5 * ((xv - mu) / sigma) ** 2) + C
+
+    init = [float(np.max(y_fit) - np.median(y_fit)), 1188.0, 2.0, float(np.median(y_fit))]
+    popt, _ = curve_fit(gaussian, x_fit, y_fit, p0=init, maxfev=10000)
+    A, mu, sigma, C = map(float, popt)
+    FWHM = 2.355 * sigma
+
+    # background + noise from off-peak region (± gauss_limit_fwhm * FWHM)
+    side = gauss_limit_fwhm * FWHM
+    bg_mask = (x < (mu - side)) | (x > (mu + side))
+    background_vals = y_corr[bg_mask]
+    background_level = float(np.median(background_vals))
+    noise = float(np.std(background_vals))
+
+    peak_signal = A + C
+    SNR = (peak_signal - background_level) / noise if noise > 0 else np.inf
+
+    return {
+        "A": A, "mu": mu, "sigma": sigma, "FWHM": FWHM, "C": C,
+        "background_level": background_level, "noise": noise,
+        "peak_signal": peak_signal, "SNR": SNR,
+        "baseline_corrected": y_corr,
+    }
+

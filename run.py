@@ -32,61 +32,41 @@ import itertools
 import logging
 from pathlib import Path
 import time
+import matplotlib.pyplot as plt
 
 import h5py
 import numpy as np
 
 # Project modules
-from cleaning_and_clustering import run_cleaning_and_clustering, ScrubConfig  # ClusterConfig optional
+from cleaning_and_clustering import run_cleaning_and_clustering, ScrubConfig  
 from mapping import run_mapping, MappingConfig
-from lineout import run_lineout, LineoutConfig
+from lineout import run_lineout, compute_peak_metrics, LineoutConfig
 
 
 # Config for the run, most important is E_Step, tolerance, and frame index for lineout
 CONFIG = {
-    #  Input 
-    "INPUT_FILE": "sxro6416-r0504.h5",     # HDF5 CCD dataset
+    #  Input
+    "INPUT_FILE": "sxro6416-r0504.h5",     # HDF5 CCD dataset to process
 
-    #  Logging 
-    "LOG_LEVEL": "INFO",
+    #  Logging
+    "LOG_LEVEL": "INFO",                   # Console log: "DEBUG" | "INFO" | "WARNING"
 
-    #  Cleaning / SPC (dataset-dependent, but paper-aligned defaults) 
-    "ROW_BATCH_SIZE": 5,                   # Rows per batch for pedestal histogram/fit
-    "K_LOW": 1.0,                          # Lower σ bound for threshold search
-    "K_HIGH": 5.0,                         # Upper σ bound for threshold search
-    "FALLBACK_SIGMA_K": 3.0,               # Fallback μ + kσ if fit/search is unstable
+    #  Mapping (reference ridge extraction + conic fit)
+    "MAP_FRAME_INDEX": 8,                  # Frame index used for mapping (geometry calibration)
+    "MAP_ALPHA1_DEG": 90.0 - 39.632,       # Half-angle for the Lβ emission line (~1218 eV)
+    "MAP_ALPHA2_DEG": 90.0 - 40.86,        # Half-angle for the Lα emission line (~1188 eV)
 
-    #  Mapping (reference ridge extraction + conic fit) 
-    "MAP_FRAME_INDEX": 8,                  # Frame analyzed for mapping
-    "MAP_BATCH_SIZE": 50,                  # Rows per batch for column-sum ridge extraction
-    "MAP_SMOOTH_SIGMA": 10.0,              # Gaussian σ for smoothing the column-sum trace
-    "MAP_R1": (1250, 1370),                # Reference region 1 [start, end) (where the Lβ curve is)
-    "MAP_R2": (1380, 1560),                # Reference region 2 [start, end) (where the Lα curve is)
-    "MAP_ALPHA1_DEG": 90.0 - 39.632,       # Half-angle for the Lβ emission (1218 eV)
-    "MAP_ALPHA2_DEG": 90.0 - 40.86,        # Half-angle for the Lα emission (1188 eV)
-    "MAP_DE_MAXITER": 2000,                # Differential-evolution max iterations
-    "MAP_DE_SEED": 42,                     # Seed for reproducibility (None to disable)
-    "MAP_W_FOCAL": 100.0,                  # Weight for focal-length residual
-    "MAP_W_VERTEX": 100.0,                 # Weight for vertex-spacing residual
+    # Lineout (energy sweep and integration)
+    "E_MIN": 1100.0,                       # Minimum photon energy (eV)
+    "E_MAX": 1604.0,                       # Maximum photon energy (eV, exclusive)
+    "E_STEP": 0.1,                         # Energy step (eV). Use 0.1 for paper-accuracy; increase for faster demo
+    "TOLERANCE_PX": 2,                     # Lateral half-width (pixels) around each iso-energy conic
+    "LINEOUT_FRAME": 8,                    # Photon-map index to analyze for the final lineout
 
-    #  Lineout (energy sweep and integration) 
-    "E_MIN": 1100.0,                       # eV
-    "E_MAX": 1604.0,                       # eV (exclusive)
-    "E_STEP": 0.1,                         # eV (used in paper; increase for a quicker demo)
-    "TOLERANCE_PX": 2,                     # Lateral half-width (pixels) around each conic
-    "LINEOUT_FRAME": 1,                    # Photon-map index to analyze
-    "HYPERB_BRANCH": "positive",           # "positive" | "negative"
-    "X_MIN": 0,                            # Parabola sampling min x (pixels)
-    "X_MAX": None,                         # Parabola sampling max x (None → grid width)
-    "PARABOLA_SAMPLES": 3000,              # Integration samples along parabola
+    #  Plotting
+    "Y_SCALE": "log",                      # Y-axis scale for spectral plot: "linear" | "log"
+    "SAVE_FIG_PATH": None,                 # Optional path to save figure (e.g., "lineout.svg"); None → no save
 
-    #  Plotting and display smoothing 
-    "PLOT": True,                          # Plot the lineout
-    "PLOT_MODE": "smoothed",               # "raw" | "smoothed" | "both"
-    "WIENER_MYSIZE": 30,                   # Wiener window (in bins): ≈ FWHM / E_STEP
-    "ERROR_BAND_K": 2.0,                   # Shade ±k·σ Poisson uncertainty
-    "Y_SCALE": "linear",                   # "linear" | "log"
-    "SAVE_FIG_PATH": None,                 # e.g., "lineout.svg" to save the figure
 }
 
 
@@ -156,14 +136,7 @@ def main() -> None:
 
     # CLEANING + CLUSTERING (SPC)
     # Gaussian pedestal fit per row-batch → dynamic threshold → BFS-style clustering.
-    scrub_cfg = ScrubConfig(
-        row_batch_size=cfg["ROW_BATCH_SIZE"],
-        k_low=cfg["K_LOW"],
-        k_high=cfg["K_HIGH"],
-        fallback_sigma_k=cfg["FALLBACK_SIGMA_K"],
-    )
-
-
+    scrub_cfg = ScrubConfig()
     cl_res = run_cleaning_and_clustering(stack, scrub=scrub_cfg)
    
 
@@ -176,16 +149,8 @@ def main() -> None:
     # Fit geometry + mapping offsets from two reference ridge regions.
     map_cfg = MappingConfig(
         frame_index=cfg["MAP_FRAME_INDEX"],
-        batch_size=cfg["MAP_BATCH_SIZE"],
-        smooth_sigma=cfg["MAP_SMOOTH_SIGMA"],
-        r1=cfg["MAP_R1"],
-        r2=cfg["MAP_R2"],
         alpha1_deg=cfg["MAP_ALPHA1_DEG"],
         alpha2_deg=cfg["MAP_ALPHA2_DEG"],
-        de_maxiter=cfg["MAP_DE_MAXITER"],
-        de_seed=cfg["MAP_DE_SEED"],
-        w_focal=cfg["MAP_W_FOCAL"],
-        w_vertex=cfg["MAP_W_VERTEX"],
     )
 
     try:
@@ -208,22 +173,31 @@ def main() -> None:
         energy_step=cfg["E_STEP"],
         tolerance=cfg["TOLERANCE_PX"],
         frame_index=cfg["LINEOUT_FRAME"],
-        hyperbola_branch=cfg["HYPERB_BRANCH"],
-        x_min=cfg["X_MIN"],
-        x_max=cfg["X_MAX"],
-        num_points_parabola=cfg["PARABOLA_SAMPLES"],
-
-        plot=cfg["PLOT"],
-
+        yscale=cfg["Y_SCALE"],
     )
 
     _lineout = run_lineout(
         photon_maps, d_opt, theta_z_opt, C1_opt, b_opt, shift_part_1, config=lcfg
     )
 
+
+    energies = _lineout.energies
+    intensity = _lineout.intensity
+    metrics = compute_peak_metrics(
+        energies, intensity,
+        peak_window=(1180.0, 1196.0),
+        mor_half_window=30,
+        mor_smooth_hw=30,
+        gauss_limit_fwhm=1.5
+    )
+
+    log.info(
+        "Peak 1188 eV fit: mu=%.3f eV, sigma=%.3f eV, FWHM=%.3f eV, SNR=%.1f",
+        metrics["mu"], metrics["sigma"], metrics["FWHM"], metrics["SNR"]
+    )
+
     # Optional: save the figure if plotting is enabled and a path is provided.
-    if cfg["PLOT"] and cfg["SAVE_FIG_PATH"]:
-        import matplotlib.pyplot as plt  # local import only when needed
+    if cfg["SAVE_FIG_PATH"]:
         Path(cfg["SAVE_FIG_PATH"]).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(cfg["SAVE_FIG_PATH"], dpi=300, bbox_inches="tight")
         log.info("Saved figure → %s", Path(cfg["SAVE_FIG_PATH"]).resolve())
@@ -235,3 +209,4 @@ def main() -> None:
 # Standard script entry point
 if __name__ == "__main__":
     main()
+    input()

@@ -56,6 +56,7 @@ class MappingConfig:
     w_focal: float = 100.0
     w_vertex: float = 100.0
 
+
 @dataclass(frozen=True)
 class MappingResult:
     """Optimised geometry & parabola offsets."""

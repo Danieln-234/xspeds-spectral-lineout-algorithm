@@ -12,11 +12,43 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
 
 ## Quick Overview
 
-- **Input:** HDF5 stack of 2048×2048 CCD frames (Princeton FrameV2 layout). The first 3 columns are dropped to remove edge artefacts.  
-- **Output:** Energy spectrum (counts/eV) and a figure with Wiener‑smoothed error bands.  
-- **Core idea:** Use two known lines (e.g., Ge Lα ≈ 1188 eV and Lβ ≈ 1218.5 eV) to fit instrument geometry; generate iso‑energy conics on the CCD; sum photon hits along those conics and normalize by local dispersion (eV per pixel).
+- **Context:**  
+  XSPEDS processes raw CCD camera frames collected from an X-ray diffraction setup,  
+  where the X-ray source produces a characteristic spectrum with prominent germanium Lα (~1188 eV) and Lβ (~1218 eV) peaks.  
+  Each frame is effectively a *snapshot* of that spectrum, showing small clusters of pixels created by individual X-ray photons hitting the detector.  
+  Because of the detector’s tilt and the Bragg diffraction geometry, these peaks appear as **curved ridges** on the CCD. See *XSPEDS_project.pdf* for more background on the experimental setup and physical motivation. See image below for an example of a CCD frame.
+
+
+- **Input:**  
+  HDF5 stack of 2048×2048 CCD frames (Princeton FrameV2 layout).  
+  The first three columns are dropped to remove edge artefacts.
+
+- **Output:**  
+  Energy spectrum (counts / eV) and an optional figure with Wiener-smoothed uncertainty bands.
+
+- **Core idea:**  
+  Use the two known germanium emission lines to fit the detector geometry,  
+  generate iso-energy conics on the CCD, and sum photon hits along those conics normalized  
+  by the local energy dispersion (eV per pixel).
+
+  ![Example raw CCD frame showing photon clusters.The curved Lα/Lβ ridges are visible](figures/cluster_example.png)
+
+  *Example raw CCD frame (2048×2048) showing individual photon clusters and the curved germanium Lα/Lβ ridges.*
+
 
 ---
+### Quantitative results
+
+- **Spectral performance (Ge Lα ≈ 1188 eV):**  
+  FWHM ≈ 2.0 eV and SNR ≈ 16–22 after baseline correction  
+  *(SNR defined relative to the pybaselines-corrected background)*  
+
+- **Geometric calibration (Lα/Lβ ridge fit):**  
+  Sub-pixel residuals (< 0.01 px) in fitted geometry parameters  
+
+See *Section 3.4* of the project report (PDF) for detailed validation and figures.
+
+
 
 **Project status:**  
 The main algorithm and functionality were completed in April 2025 as part of my Oxford computational project.  
@@ -28,9 +60,13 @@ Subsequent commits involve only formatting, documentation, and readability impro
 
 
 **Requirements:**
-- `numpy`, `scipy`, `h5py`, `matplotlib`
-- If you plot spectra: `matplotlib`
-- If you keep Wiener filtering: `scipy.signal` (part of SciPy)
+
+`numpy`, `scipy`, `h5py`, `matplotlib`, `pybaselines`, `matplotlib`
+
+All dependencies are also listed in `requirements.txt`; install via:
+```bash
+pip install -r requirements.txt
+
 
 
 
@@ -50,19 +86,6 @@ Subsequent commits involve only formatting, documentation, and readability impro
 ---
 
 
-
-### Key knobs
-
-- **Input**: `INPUT_FILE`
-- **Logging**: `LOG_LEVEL`
-- **Cleaning / SPC**: `ROW_BATCH_SIZE`, `K_LOW`, `K_HIGH`, `FALLBACK_SIGMA_K`
-- **Mapping**: `MAP_*` (frame index, ridge regions, known line half‑angles, optimizer settings, weights)
-- **Lineout / Spectrum**: `E_MIN/E_MAX/E_STEP`, `TOLERANCE_PX`, `LINEOUT_FRAME`, `HYPERB_BRANCH`, `PARABOLA_SAMPLES`
-- **Plotting**: `PLOT`, `PLOT_MODE` (`raw | smoothed | both`), `WIENER_MYSIZE`, `ERROR_BAND_K`, `Y_SCALE`, `SAVE_FIG_PATH`
-
-The script logs the fitted geometry and total clusters; if plotting is enabled, it displays or saves a spectrum.
-
----
 
 ## What the pipeline does
 
@@ -101,8 +124,7 @@ Note to self- mention where these configs affect
 
 ## Outputs
 
-- **Console log:** geometry fit, counts summary, runtime.
+- **Console log:** geometry fit, counts summary, Lα FWHM and SNR, runtime.
 - **Figure (optional):** spectrum with ±k·σ bands; save via `SAVE_FIG_PATH`.
-- (If you expose them) arrays for **photon maps**, **iso‑energy masks**, and the **counts/eV** vector.
 
 ---
