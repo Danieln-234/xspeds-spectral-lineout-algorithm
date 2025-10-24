@@ -34,7 +34,7 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
   Energy spectrum (counts / eV) and an optional figure with Wiener-smoothed uncertainty bands.
 
 - **Core idea:**  
-  Use the two known germanium emission lines to fit the detector geometry,  
+  Use the two known germanium Lα and Lβ ridge peaks to fit the detector geometry,  
   generate iso-energy conics on the CCD, and sum photon hits along those conics normalized  
   by the local energy dispersion (eV per pixel).
 
@@ -68,12 +68,7 @@ Subsequent commits involve only formatting, documentation, and readability impro
 All dependencies are also listed in `requirements.txt`; install via:
 ```bash
 pip install -r requirements.txt
-
-
-
-
-
-
+```
 
 ## Data expectations
 
