@@ -352,6 +352,7 @@ def run_mapping(image_data: Sequence[NDArray[np.float64]], *, config: MappingCon
     alpha1 = np.deg2rad(cfg.alpha1_deg)
     alpha2 = np.deg2rad(cfg.alpha2_deg)
 
+    #TODO: normalise by expected uncertainty for weighted least-squares
     def cost(p: NDArray[np.float64]) -> float:
         r = residuals(p, y1, x1, y2, x2, alpha1, alpha2, w_focal=cfg.w_focal, w_vertex=cfg.w_vertex)
         return float(np.dot(r, r))
