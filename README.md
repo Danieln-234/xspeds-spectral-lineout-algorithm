@@ -19,7 +19,7 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
   Because of the detector’s tilt and the Bragg diffraction geometry, these peaks appear as **curved ridges** on the CCD. See *XSPEDS_project.pdf* for more background on the experimental setup and physical motivation. 
 
   <p align="center">
-    <img src="figures/raw_frame_example.png" width="420">
+    <img src="figures/cluster_example.png" width="420">
     <br>
     <em>Example raw CCD frame (2048 by 2048) showing photon clusters. The curved Lα/Lβ ridges are visible.</em>
   </p>
