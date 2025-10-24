@@ -16,7 +16,14 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
   XSPEDS processes raw CCD camera frames collected from an X-ray diffraction setup,  
   where the X-ray source produces a characteristic spectrum with prominent germanium Lα (~1188 eV) and Lβ (~1218 eV) peaks.  
   Each frame is effectively a *snapshot* of that spectrum, showing small clusters of pixels created by individual X-ray photons hitting the detector.  
-  Because of the detector’s tilt and the Bragg diffraction geometry, these peaks appear as **curved ridges** on the CCD. See *XSPEDS_project.pdf* for more background on the experimental setup and physical motivation. See image below for an example of a CCD frame.
+  Because of the detector’s tilt and the Bragg diffraction geometry, these peaks appear as **curved ridges** on the CCD. See *XSPEDS_project.pdf* for more background on the experimental setup and physical motivation. 
+
+  <p align="center">
+    <img src="figure/raw_frame_example.png" width="420">
+    <br>
+    <em>Example raw CCD frame (2048 by 2048) showing photon clusters. The curved Lα/Lβ ridges are visible.</em>
+  </p>
+
 
 
 - **Input:**  
@@ -30,11 +37,6 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
   Use the two known germanium emission lines to fit the detector geometry,  
   generate iso-energy conics on the CCD, and sum photon hits along those conics normalized  
   by the local energy dispersion (eV per pixel).
-
-  ![Example raw CCD frame showing photon clusters.The curved Lα/Lβ ridges are visible](figures/cluster_example.png)
-
-  *Example raw CCD frame (2048×2048) showing individual photon clusters and the curved germanium Lα/Lβ ridges.*
-
 
 ---
 ### Quantitative results
