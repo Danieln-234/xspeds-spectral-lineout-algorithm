@@ -63,7 +63,7 @@ Subsequent commits involve only formatting, documentation, and readability impro
 
 **Requirements:**
 
-`numpy`, `scipy`, `h5py`, `matplotlib`, `pybaselines`, `matplotlib`
+`numpy`, `scipy`, `h5py`, `matplotlib`, `pybaselines`
 
 All dependencies are also listed in `requirements.txt`; install via:
 ```bash
@@ -100,10 +100,13 @@ Reads frames from the HDF5 tree into a `(N, H, W)` stack (`float64`) and drops t
 - **Parameter fit:** fit parabolas to both ridges and solve for distance **d** and tilt **θ_z** by minimizing (1) scatter residuals, (2) **focal‑length residual** via \(F=1/4A\), and (3) **vertex‑gap residual**. Uses global **differential evolution** with an optional seed, followed by local least‑squares.
 
 ### 4) Lineout (physics output)
-- Generate **iso‑energy conics** using the fitted geometry and \(alpha(E)\).
+- Generate **iso-energy conics** using the fitted geometry and \( \alpha(E) \).
 - **Sum photon counts** within ±`TOLERANCE_PX` laterally around each conic.
-- **Normalize to counts/eV:** divide by the local energy bin width \(W(E)=(2\,	ext{tol}+1)\,\mathrm{d}E/\mathrm{d}p\) because dispersion varies strongly across the band.
-- **Uncertainties:** Poisson shot noise (σ≈√N). Optional **Wiener** smoothing for display and shaded ±`ERROR_BAND_K`·σ bands.
+- **Normalize to counts per eV:** divide by the local energy bin width  
+  \( W(E) = (2\,\text{tol} + 1)\,\frac{dE}{dp} \),  
+  since the dispersion \( \frac{dE}{dp} \) varies across the detector.
+- **Uncertainties:** Poisson shot noise (σ ≈ √N). Optionally apply **Wiener smoothing** for display and shade ±`ERROR_BAND_K` · σ uncertainty bands.
+
 
 ---
 

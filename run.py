@@ -209,4 +209,5 @@ def main() -> None:
 # Standard script entry point
 if __name__ == "__main__":
     main()
-    input()
+    # Keep the plot window open when run outside an interactive environment
+    input("Press Enter to close")

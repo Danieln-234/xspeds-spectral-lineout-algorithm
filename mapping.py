@@ -257,7 +257,7 @@ def compute_conic_params(alpha: float, d: float, e_i: NDArray[np.float64], e_j: 
 
 
 # Residuals 
-
+#TODO: normalise by expected uncertainty for weighted least-squares
 def residuals(
     p: NDArray[np.float64],
     y1: NDArray[np.float64],
