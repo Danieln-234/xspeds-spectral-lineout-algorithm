@@ -16,7 +16,13 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
 - **Output:** Energy spectrum (counts/eV) and a figure with Wiener‑smoothed error bands.  
 - **Core idea:** Use two known lines (e.g., Ge Lα ≈ 1188 eV and Lβ ≈ 1218.5 eV) to fit instrument geometry; generate iso‑energy conics on the CCD; sum photon hits along those conics and normalize by local dispersion (eV per pixel).
 
+---
 
+**Project status:**  
+The main algorithm and functionality were completed in April 2025 as part of my Oxford computational project.  
+Subsequent commits involve only formatting, documentation, and readability improvements. The underlying logic and results remain unchanged from the original implementation.
+
+---
 
 
 
