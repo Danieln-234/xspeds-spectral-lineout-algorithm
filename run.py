@@ -4,9 +4,6 @@ Overview:
 --------
 This script demonstrates an end-to-end implementation of the XSPEDS algorithm:
 it converts raw CCD frames into a physically-meaningful spectrum (counts per eV).
-The code is organized to be readable to reviewers and recruiters: configuration
-is visible at the top, the pipeline stages are clearly separated, and comments
-explain intent and rationale rather than just mechanics.
 
 Pipeline stages:
 ---------------
