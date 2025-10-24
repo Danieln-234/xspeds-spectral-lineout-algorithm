@@ -108,7 +108,6 @@ Reads frames from the HDF5 tree into a `(N, H, W)` stack (`float64`) and drops t
 ---
 
 ## Configuration reference
-Note to self- mention where these configs affect
 
 | Key | Meaning | Typical impact |
 |---|---|---|
