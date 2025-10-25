@@ -4,9 +4,7 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
 
 1) Dynamic single‑photon cleaning & clustering,  
 2) Geometric mapping from CCD pixels to energy via Bragg‑derived iso‑energy conics, and  
-3) energy‑normalized lineouts with Poisson uncertainty bands.
-
-
+3) Energy‑normalized lineouts with Poisson uncertainty bands.
 
 
 
