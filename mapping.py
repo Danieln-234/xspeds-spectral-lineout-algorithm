@@ -59,17 +59,28 @@ class MappingConfig:
 
 @dataclass(frozen=True)
 class MappingResult:
-    """Optimised geometry & parabola offsets."""
-    d: float                  # source distance (negative; same units as your model)
-    theta_z: float            # radians
-    C1: float                 # pixels
-    b: float                  # pixels (shared y-vertex)
-    shift: float              # pixels, convenience from cone1 vertex x
+    """Optimised XSPEDS geometry and fitted parabola parameters.
+
+    Args:
+    d:Source–detector distance (negative; same units as in the model).
+    theta_z: CCD tilt angle (radians).
+    C1: Parabola curvature coefficient (pixels).
+    b: Shared y-vertex offset (pixels).
+    shift: x-offset correction (pixels; cone-1 vertex shift).
+    focal_fit: Focal lengths derived from fitted curves (p1_fit, p2_fit).
+    focal_theory: Theoretical focal lengths from Bragg geometry (p1_theory, p2_theory).
+    residual_norms: Diagnostic residuals: {'r1_data', 'r2_data', 'focal', 'vertex'}.
+    """
+    d: float        
+    theta_z: float     
+    C1: float     
+    b: float                 
+    shift: float             
 
     # Optional diagnostics 
-    focal_fit: tuple[float, float]        # (p1_fit, p2_fit)
-    focal_theory: tuple[float, float]     # (p1_theory, p2_theory)
-    residual_norms: Dict[str, float]      # {'r1_data':..., 'r2_data':..., 'focal':..., 'vertex':...}
+    focal_fit: tuple[float, float]        
+    focal_theory: tuple[float, float] 
+    residual_norms: Dict[str, float] 
 
     def as_tuple(self):
         return (self.d, self.theta_z, self.C1, self.b, self.shift)
