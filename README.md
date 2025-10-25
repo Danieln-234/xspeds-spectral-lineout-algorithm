@@ -56,6 +56,10 @@ See *Section 3.4* of the project report (PDF) for detailed validation and figure
 The main algorithm and functionality were completed in April 2025 as part of my Oxford computational project.  
 Subsequent commits involve only formatting, documentation, and readability improvements. The underlying logic and results remain unchanged from the original implementation.
 
+**Validation and testing:**  
+The project focused on scientific and algorithmic validation (benchmark spectra, SNR, FWHM checks) rather than formal unit testing, as the goal was to verify physical accuracy rather than production robustness.  
+In a production or data-pipeline setting, lightweight unit tests (e.g. for geometry fitting and thresholding) could be added for reproducibility.
+
 ---
 
 
