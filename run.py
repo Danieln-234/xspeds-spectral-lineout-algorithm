@@ -205,8 +205,8 @@ def main() -> None:
     log.info("Pipeline finished in %.2fs", dt)
 
 
-# Standard script entry point
 if __name__ == "__main__":
     main()
     # Keep the plot window open when run outside an interactive environment
+    # TODO: pls just sort out plt.show, don't be lazy
     input("Press Enter to close")

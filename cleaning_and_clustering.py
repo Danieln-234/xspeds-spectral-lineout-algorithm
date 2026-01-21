@@ -1,3 +1,4 @@
+# TODO: add more comments
 """
 Cleaning and clustering stage of the XSPEDS algorithm.
 
@@ -127,8 +128,8 @@ def scrubbing(
     """
     Fit a Gaussian pedestal per row-batch and dynamically threshold each batch.
 
-    Parameters
-    ----------
+    Parameters:
+    
     image_data : Sequence[np.ndarray]
         Sequence of 2D arrays (each frame is H×W, dtype float-like ADU).
     size_rows : int
@@ -140,8 +141,8 @@ def scrubbing(
     fallback_sigma_k : float
         Fallback multiplier k for threshold = μ + k σ when fit/search unstable.
 
-    Returns
-    -------
+    Returns:
+    
     list[np.ndarray]
         Scrubbed image data (same shapes as input), background set to zero.
     """
@@ -176,7 +177,7 @@ def scrubbing(
                 sigma = abs(float(sigma)) + 1e-12
                 fit_ok = True
             except Exception:
-                # Degenerate/unstable fit; fall back to moments
+                # Degenerate/unstable fit; go back to moments
                 mu = float(np.mean(batch))
                 sigma = float(np.std(batch) + 1e-6)
                 amp = float(np.max(counts)) if counts.size else 1.0
@@ -189,7 +190,7 @@ def scrubbing(
             mask = (centers >= lower_v) & (centers <= upper_v)
             if fit_ok and np.any(mask):
                 pred = _gauss(centers, amp, mu, sigma)
-                # choose bin center where |observed - 2*predicted| is minimized
+                # choose bin center where abs(observed - 2*predicted) is minimized
                 diffs = np.abs(counts[mask] - 2.0 * pred[mask])
                 idx_local = int(np.argmin(diffs))
                 threshold = float(centers[mask][idx_local])

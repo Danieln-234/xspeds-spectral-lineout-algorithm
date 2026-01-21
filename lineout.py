@@ -1,3 +1,4 @@
+# TODO: add more comments
 """
 Spectral lineout via iso-energy conic summation (ellipse/hyperbola/parabola).
 
