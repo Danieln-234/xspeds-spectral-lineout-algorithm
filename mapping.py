@@ -1,7 +1,7 @@
 """
 'Energy/position mapping via reference-peak scatter fitting and conic geometry.'
 """
-
+# TODO: add more comments
 from __future__ import annotations
 
 import logging
