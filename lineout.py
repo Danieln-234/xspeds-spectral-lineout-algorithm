@@ -26,11 +26,8 @@ from scipy.optimize import curve_fit
 from scipy.signal import wiener  # Wiener filter for denoising the 1D spectrum
 
 
-# Optional plotting
-try:
-    import matplotlib.pyplot as plt
-except Exception:  # pragma: no cover
-    plt = None
+import matplotlib.pyplot as plt
+
 
 logger = logging.getLogger("xspeds.lineout")
 if not logger.handlers:

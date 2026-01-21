@@ -49,7 +49,7 @@ CONFIG = {
     "INPUT_FILE": "sxro6416-r0504.h5",     # HDF5 CCD dataset to process
 
     #  Logging
-    "LOG_LEVEL": "INFO",                   # Console log: "DEBUG" | "INFO" | "WARNING"
+    "LOG_LEVEL": "INFO",                   # Console log: "DEBUG", "INFO", "WARNING"
 
     #  Mapping (reference ridge extraction + conic fit)
     "MAP_FRAME_INDEX": 8,                  # Frame index used for mapping (geometry calibration)
@@ -64,7 +64,7 @@ CONFIG = {
     "LINEOUT_FRAME": 8,                    # Photon-map index to analyze for the final lineout
 
     #  Plotting
-    "Y_SCALE": "log",                      # Y-axis scale for spectral plot: "linear" | "log"
+    "Y_SCALE": "log",                      # Y-axis scale for spectral plot: "linear", "log"
     "SAVE_FIG_PATH": None,                 # Optional path to save figure (e.g., "lineout.svg"); None → no save
 
 }
@@ -74,7 +74,6 @@ CONFIG = {
 #             Logging          #
 ################################
 def setup_logging(level: str = "INFO") -> None:
-    """Configure a root logger so messages from all submodules are consistent."""
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
