@@ -23,7 +23,7 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
   </p>
 
   <p align="center">
-    <img src="outputs/lineout.png" width="520">
+    <img src="outputs/20260201_235940/lineout.png" width="520">
     <br>
     <em>
       Example spectral lineout (counts per eV) produced by integrating the photon map along iso-energy conics (with uncertainty bands).
