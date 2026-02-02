@@ -6,7 +6,7 @@ This script demonstrates an end-to-end implementation of the XSPEDS algorithm:
 it converts raw CCD frames into a physically-meaningful spectrum (counts per eV).
 
 Pipeline stages:
----------------
+
 1) Load:
    Read a CCD frame stack from HDF5 (dataset-specific layout). Each CCD frame is a 2048x2048 2D Numpy array. The first three
    columns are dropped to avoid spurious edge values observed in this dataset. We have 20 frames in the HD5 file example
@@ -33,6 +33,7 @@ import logging
 from pathlib import Path
 import time
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 import h5py
 import numpy as np
@@ -58,7 +59,7 @@ CONFIG = {
 
     # Lineout (energy sweep and integration)
     "E_MIN": 1100.0,                       # Minimum photon energy (eV)
-    "E_MAX": 1604.0,                       # Maximum photon energy (eV, exclusive)
+    "E_MAX": 1600,                       # Maximum photon energy (eV, exclusive)
     "E_STEP": 0.1,                         # Energy step (eV). Use 0.1 for paper-accuracy; increase for faster demo
     "TOLERANCE_PX": 2,                     # Lateral half-width (pixels) around each iso-energy conic
     "LINEOUT_FRAME": 8,                    # Photon-map index to analyze for the final lineout
@@ -127,6 +128,11 @@ def main() -> None:
     setup_logging(cfg["LOG_LEVEL"])
     log = logging.getLogger("xspeds.run")
 
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = Path("outputs") / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    log.info("Output dir: %s", out_dir.resolve())
+
     t0 = time.perf_counter()
 
     # LOAD
@@ -134,7 +140,7 @@ def main() -> None:
     log.info("Loaded stack: shape=%s (frames, rows, cols)", stack.shape)
 
     # CLEANING + CLUSTERING (SPC)
-    # Gaussian pedestal fit per row-batch → dynamic threshold → BFS-style clustering.
+    # Gaussian pedestal fit per row-batch - dynamic threshold - BFS-style clustering.
     scrub_cfg = ScrubConfig()
     cl_res = run_cleaning_and_clustering(stack, scrub=scrub_cfg)
    
@@ -152,11 +158,9 @@ def main() -> None:
         alpha2_deg=cfg["MAP_ALPHA2_DEG"],
     )
 
-    try:
-        map_out = run_mapping(stack, config=map_cfg)
-    except TypeError:
-        # Back-compat call if older signature is present
-        map_out = run_mapping(stack)
+
+    map_out = run_mapping(stack, config=map_cfg)
+
 
     (d_opt, theta_z_opt, C1_opt, b_opt, shift_part_1) = map_out.as_tuple()
     log.info(
@@ -166,6 +170,7 @@ def main() -> None:
 
     # SPECTRAL LINEOUT
     # Sum along iso-energy conics and normalize by local eV window width.
+    out_dir.mkdir(parents=True, exist_ok=True)
     lcfg = LineoutConfig(
         energy_min=cfg["E_MIN"],
         energy_max=cfg["E_MAX"],
@@ -173,11 +178,15 @@ def main() -> None:
         tolerance=cfg["TOLERANCE_PX"],
         frame_index=cfg["LINEOUT_FRAME"],
         yscale=cfg["Y_SCALE"],
+        save_fig_path=str(out_dir / "lineout.png"),
     )
 
     _lineout = run_lineout(
         photon_maps, d_opt, theta_z_opt, C1_opt, b_opt, shift_part_1, config=lcfg
     )
+
+    _lineout.to_dataframe().to_csv(out_dir / "lineout.csv", index=False)
+
 
 
     energies = _lineout.energies
@@ -195,11 +204,7 @@ def main() -> None:
         metrics["mu"], metrics["sigma"], metrics["FWHM"], metrics["SNR"]
     )
 
-    # Optional: save the figure if plotting is enabled and a path is provided.
-    if cfg["SAVE_FIG_PATH"]:
-        Path(cfg["SAVE_FIG_PATH"]).parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(cfg["SAVE_FIG_PATH"], dpi=300, bbox_inches="tight")
-        log.info("Saved figure → %s", Path(cfg["SAVE_FIG_PATH"]).resolve())
+
 
     dt = time.perf_counter() - t0
     log.info("Pipeline finished in %.2fs", dt)
@@ -207,6 +212,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    # Keep the plot window open when run outside an interactive environment
-    # TODO: pls just sort out plt.show, don't be lazy
-    input("Press Enter to close")
+

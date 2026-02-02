@@ -22,6 +22,15 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
     <em>Example raw CCD frame (2048 by 2048) showing photon clusters. The curved Lα/Lβ ridges are visible.</em>
   </p>
 
+  <p align="center">
+    <img src="outputs/lineout.png" width="520">
+    <br>
+    <em>
+      Example spectral lineout (counts per eV) produced by integrating the photon map along iso-energy conics (with uncertainty bands).
+    </em>
+  </p>
+
+
 
 
 - **Input:**  

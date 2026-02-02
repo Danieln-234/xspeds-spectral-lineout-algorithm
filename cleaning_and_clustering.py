@@ -11,7 +11,6 @@ Produces:
 - per-frame photon maps (1 = centroid, 2 = large/irregular clusters)
 
 Example
--------
 from cleaning_and_clustering import ScrubConfig, run_cleaning_and_clustering
 
 scrub = ScrubConfig(row_batch_size=5, k_low=1.0, k_high=5.0)
@@ -45,7 +44,7 @@ class ScrubConfig:
     Configuration for pedestal fitting and dynamic thresholding.
 
     Parameters
-    ----------
+    
     row_batch_size : int
         Number of image rows per batch for histogram/fit (e.g., 5).
     k_low : float
@@ -60,7 +59,7 @@ class ScrubConfig:
         Maximum histogram bin count for the batch histogram.
     other_flag_threshold : float
         If a cluster is classified as "other" and its max_value exceeds this,
-        mark its centroid as 2 in the photon map.
+        mark its centroid as 2 in the photon map - see paper
     """
     row_batch_size: int = 5
     k_low: float = 1.0
@@ -353,14 +352,12 @@ def run_cleaning_and_clustering(
     """
     Scrub a stack of images and detect clusters, producing photon maps and cluster metadata.
 
-    Parameters
-    ----------
+    Parameters:
     image_data : sequence of 2D NumPy arrays (each frame H×W)
     scrub : ScrubConfig
         Centralized configuration for pedestal fit, threshold search, and flags.
 
-    Returns
-    -------
+    Returns:
     ClusteringResult
         .photon_maps (list of H×W int arrays) and .clusters (list of dicts).
     """
