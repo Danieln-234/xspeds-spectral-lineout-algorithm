@@ -94,9 +94,9 @@ def load_image_data(f_name: str) -> np.ndarray:
     revisit the column-drop convention.
 
     Returns
-    -------
+    
     stack : np.ndarray, shape (N, H, W)
-        Stack of frames as float64, with the first three columns removed.
+        Stack of frames, with the first three columns removed.
     """
     path = Path(f_name)
     if not path.exists():

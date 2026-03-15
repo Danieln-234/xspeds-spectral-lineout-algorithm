@@ -64,14 +64,12 @@ class MappingResult:
     """
     Optimised XSPEDS geometry and mapping offsets.
 
-    d        : source–detector distance (negative; in *pixels*, consistent with u,v)
+    d: source–detector distance (negative; in *pixels*, consistent with u,v)
     theta_z  : CCD tilt angle (radians)
-    C1       : x-vertex offset of reference ridge 1 (pixels)
-    b        : shared y-vertex position (pixels)
-    shift    : raw-geometry vertex u-coordinate for cone 1 (used downstream as shift_part_1)
+    C1: x-vertex offset of reference ridge 1 (pixels)
+    b: shared y-vertex position (pixels)
+    shift: raw-geometry vertex u-coordinate for cone 1 (used downstream as shift_part_1)
 
-    focal_fit/theory are omitted here because the old “focal length” concept was
-    the inconsistent part; we now use curvature matching internally.
     """
     d: float
     theta_z: float
@@ -93,8 +91,7 @@ class MappingResult:
 
 
 
-import numpy as np
-from numpy.typing import NDArray
+
 
 # NB for the scaling, the lsq part has x = 'jac' modifier but we need this for DE.
 
@@ -210,7 +207,7 @@ def find_scatter_peaks(
       row_start, row_end,
       peak_index1, peak_index2,
       peak_value1, peak_value2,
-      sigma_x1, sigma_x2   (estimated x-uncertainty in pixels for each peak)
+      sigma_x1, sigma_x2 - (estimated x-uncertainty in pixels for each peak)
     """
     H, W = array_dat.shape
     no_batches = int(np.ceil(H / batch_size))
@@ -386,9 +383,7 @@ def left_vertex_and_local_curvature_u_of_v(
 #        Residuals     #
 ########################
 
-import numpy as np
-from numpy.typing import NDArray
-from typing import Tuple
+
 
 def residuals(
     p: NDArray[np.float64],

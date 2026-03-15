@@ -45,21 +45,20 @@ class ScrubConfig:
 
     Parameters
     
-    row_batch_size : int
+    row_batch_size : 
         Number of image rows per batch for histogram/fit (e.g., 5).
-    k_low : float
-        Lower bound (in σ) for threshold search window [μ + k_low σ, μ + k_high σ].
-    k_high : float
+    k_low : Lower bound (in σ) for threshold search window [μ + k_low σ, μ + k_high σ].
+    k_high : 
         Upper bound (in σ) for threshold search window.
     fallback_sigma_k : float
         If fit/search is unstable, fallback threshold = μ + fallback_sigma_k σ.
-    min_bins : int
+    min_bins : 
         Minimum histogram bin count for the batch histogram.
-    max_bins : int
+    max_bins : 
         Maximum histogram bin count for the batch histogram.
-    other_flag_threshold : float
+    other_flag_threshold : 
         If a cluster is classified as "other" and its max_value exceeds this,
-        mark its centroid as 2 in the photon map - see paper
+        mark its centroid as 2 in the photon map -see paper
     """
     row_batch_size: int = 5
     k_low: float = 1.0
@@ -87,6 +86,7 @@ class ClusteringResult:
 def _scotts_rule_bins(batch: NDArray[np.float64], *, min_bins: int, max_bins: int) -> int:
     """
     Compute a histogram bin count using Scott’s rule, clipped to [min_bins, max_bins].
+    NB in the examples, not typically needed as it returns 1 usually (left over from previous histogram-based threshold search).
     """
     x = batch
     n = max(int(x.size), 1)
@@ -104,10 +104,10 @@ def _scotts_rule_bins(batch: NDArray[np.float64], *, min_bins: int, max_bins: in
 
 
 def _gauss(x: NDArray[np.float64], amp: float, mu: float, sigma: float) -> NDArray[np.float64]:
-    """
-    Simple Gaussian model used for pedestal fitting.
-    """
-    sigma = abs(float(sigma)) + 1e-12  # guard against negative / zero
+    
+    # Simple Gaussian model used for pedestal fitting.
+    
+    sigma = abs(float(sigma)) + 1e-12  # guard against negative/zero - well hopefully nothing is inputted on this order
     return amp * np.exp(-((x - mu) ** 2) / (2.0 * sigma * sigma))
 
 #####################################
@@ -128,21 +128,18 @@ def scrubbing(
     Fit a Gaussian pedestal per row-batch and dynamically threshold each batch.
 
     Parameters:
-    
-    image_data : Sequence[np.ndarray]
+    image_data: 
         Sequence of 2D arrays (each frame is H×W, dtype float-like ADU).
-    size_rows : int
+    size_rows: 
         Number of rows per batch for histogram/fit (e.g., 5).
-    lower_bound, upper_bound : float
+    lower_bound, upper_bound: 
         Bounds (in σ) for the threshold search window.
-    min_bins, max_bins : int
+    min_bins, max_bins: 
         Bounds on histogram bin count.
-    fallback_sigma_k : float
+    fallback_sigma_k: 
         Fallback multiplier k for threshold = μ + k σ when fit/search unstable.
 
     Returns:
-    
-    list[np.ndarray]
         Scrubbed image data (same shapes as input), background set to zero.
     """
     if size_rows <= 0:
@@ -230,23 +227,21 @@ def detect_clusters(
     Identify 4-connected clusters, classify simple shapes, and return a photon map.
 
     Parameters
-    ----------
-    image : np.ndarray
+    image: 
         2D scrubbed NumPy array (H×W), where background pixels are zero.
-    other_flag_threshold : float
+    other_flag_threshold: 
         If shape=='other' and max_value > this threshold, mark the centroid as 2.
 
     Returns
-    -------
-    clusters_dict : dict
+    clusters_dict: 
         Mapping from cluster number to cluster info dict with keys:
-            - 'coords': set[(r, c)]
-            - 'shape': {'single','line2','line3','lshape3','box4','other'}
-            - 'max_value': float
-            - 'values': list[float]
-            - 'sum': float
-            - 'centroid': (r, c)
-    centroid_map : np.ndarray
+            'coords': set[(r, c)]
+            'shape': {'single','line2','line3','lshape3','box4','other'}
+            'max_value': float
+            'values': list[float]
+            'sum': float
+            'centroid': (r, c)
+    centroid_map :
         2D int array (H×W): 1 = centroid; 2 = large/irregular; 0 = background.
     """
     if image.ndim != 2:

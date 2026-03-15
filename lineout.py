@@ -4,16 +4,9 @@
 """
 Spectral lineout via iso-energy conic summation (ellipse/hyperbola/parabola).
 
-Optimisations vs original:
-  - Precompute rotated basis once (no per-energy rotations).
-  - Precompute alpha(E) vectorised.
-  - Precompute horizontal box-sums of the CCD image once per tolerance,
-    then sample a single value per row/point instead of summing tiny slices.
-  - Compute normalisation windows W(E) from d(vertex_x)/dE via np.gradient
-    using stored vertex_x from the same conic eval used for summation
-    (no second isoenergy_curves loop).
-  - Use np.linalg.eigh for symmetric eigenproblems (faster/stabler).
-  - Plotting bugfix: error band uses intensity when smoothed is None.
+See paper
+
+
 """
 
 from __future__ import annotations
