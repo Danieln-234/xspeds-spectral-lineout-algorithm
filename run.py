@@ -1,80 +1,77 @@
-"""XSPEDS pipeline runner (load → clean+cluster → mapping → lineout).
+"""XSPEDS pipeline runner (load -> clean+cluster -> mapping -> lineout).
 
-Overview:
---------
-This script demonstrates an end-to-end implementation of the XSPEDS algorithm:
-it converts raw CCD frames into a physically-meaningful spectrum (counts per eV).
+Converts raw CCD frames into a physically meaningful spectrum (counts per eV).
 
 Pipeline stages:
 
 1) Load:
-   Read a CCD frame stack from HDF5 (dataset-specific layout). Each CCD frame is a 2048x2048 2D Numpy array. The first three
-   columns are dropped to avoid spurious edge values observed in this dataset. We have 20 frames in the HD5 file example
+   Read the CCD frame stack from HDF5 (dataset-specific layout). Each frame is a
+   2048x2048 array; the first three columns are dropped to avoid spurious edge
+   values seen in this dataset. The example file holds 20 frames.
 
 2) Cleaning + Clustering (SPC):
-   Fit Gaussian pedestals per row-batch and derive dynamic thresholds to which we scrub 
-   (e.g. threhold of 90, we set every pixel with a number below 90 to 0). Then cluster
-   photon hits (single pixels, small shapes), idenitfying them based on the shapes mentioned in paper (with some statistical justification).
-   Outputs per-frame "photon maps".
+   Fit Gaussian pedestals per row batch and derive dynamic thresholds (e.g. a
+   threshold of 90 zeroes every pixel below 90). Then cluster the surviving
+   pixels into photon hits, classifying the shapes described in the paper.
+   Outputs per-frame photon maps.
 
 3) Mapping (instrument calibration):
-   Fit the cone–plane geometry and mapping offsets from reference ridges to
-   obtain energy-dependent conic parameters in CCD coordinates.
+   Fit the cone-plane geometry and mapping offsets from the two reference
+   ridges to get energy-dependent conic parameters in CCD coordinates.
 
 4) Lineout (physics output):
-   Sum along iso-energy conics and normalize by the local eV window width to
-   yield counts per eV. Apply Wiener smoothing for display and
-   draw ±k·σ Poisson uncertainty bands as a shaded region. Signal-to-Noise of the Lα is found 
+   Sum along iso-energy conics and normalise by the local eV window width to
+   get counts per eV, with Wiener smoothing for display and +-k sigma Poisson
+   uncertainty bands. Finally fit the L-alpha peak for FWHM and SNR.
 """
 
 from __future__ import annotations
+
 import itertools
 import logging
-from pathlib import Path
 import time
-import matplotlib.pyplot as plt
 from datetime import datetime
+from pathlib import Path
 
 import h5py
 import numpy as np
 
-# Project modules
-from cleaning_and_clustering import run_cleaning_and_clustering, ScrubConfig  
-from mapping import run_mapping, MappingConfig
-from lineout import run_lineout, compute_peak_metrics, LineoutConfig
+from cleaning_and_clustering import ScrubConfig, run_cleaning_and_clustering
+from lineout import LineoutConfig, compute_peak_metrics, run_lineout
+from mapping import MappingConfig, run_mapping
 
-
-# Config for the run, most important is E_Step, tolerance, and frame index for lineout
+# Config for the run; the most important knobs are E_STEP, TOLERANCE_PX,
+# and the frame index for the lineout
 CONFIG = {
-    #  Input
+    # Input
     "INPUT_FILE": "sxro6416-r0504.h5",     # HDF5 CCD dataset to process
 
-    #  Logging
-    "LOG_LEVEL": "INFO",                   # Console log: "DEBUG", "INFO", "WARNING"
+    # Logging
+    "LOG_LEVEL": "INFO",                   # "DEBUG", "INFO", "WARNING"
 
-    #  Mapping (reference ridge extraction + conic fit)
-    "MAP_FRAME_INDEX": 8,                  # Frame index used for mapping (geometry calibration)
-    "MAP_ALPHA1_DEG": 90.0 - 39.632,       # Half-angle for the Lβ emission line (~1218 eV)
-    "MAP_ALPHA2_DEG": 90.0 - 40.86,        # Half-angle for the Lα emission line (~1188 eV)
+    # Mapping (reference ridge extraction + conic fit)
+    "MAP_FRAME_INDEX": 8,                  # Frame used for geometry calibration
+    "MAP_ALPHA1_DEG": 90.0 - 39.632,       # Half-angle for the L-beta line (~1218 eV)
+    "MAP_ALPHA2_DEG": 90.0 - 40.86,        # Half-angle for the L-alpha line (~1188 eV)
 
     # Lineout (energy sweep and integration)
     "E_MIN": 1100.0,                       # Minimum photon energy (eV)
-    "E_MAX": 1600,                       # Maximum photon energy (eV, exclusive)
-    "E_STEP": 0.1,                         # Energy step (eV). Use 0.1 for paper-accuracy; increase for faster demo
-    "TOLERANCE_PX": 2,                     # Lateral half-width (pixels) around each iso-energy conic
-    "LINEOUT_FRAME": 8,                    # Photon-map index to analyze for the final lineout
+    "E_MAX": 1600.0,                       # Maximum photon energy (eV, exclusive)
+    "E_STEP": 0.1,                         # Energy step (eV); 0.1 matches the paper, larger is faster
+    "TOLERANCE_PX": 2,                     # Lateral half-width (pixels) around each conic
+    "LINEOUT_FRAME": 8,                    # Photon map index for the final lineout
 
-    #  Plotting
-    "Y_SCALE": "log",                      # Y-axis scale for spectral plot: "linear", "log"
-    "SAVE_FIG_PATH": None,                 # Optional path to save figure (e.g., "lineout.svg"); None → no save
-
+    # Plotting
+    "Y_SCALE": "log",                      # "linear" or "log"
 }
 
 
-################################
-#             Logging          #
-################################
 def setup_logging(level: str = "INFO") -> None:
+    """Configure console logging for the pipeline.
+
+    Args:
+        level: Logging level name, e.g. "INFO" or "DEBUG".
+    """
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -82,21 +79,17 @@ def setup_logging(level: str = "INFO") -> None:
     )
 
 
-#######################################
-#              Load Data              #
-#######################################
 def load_image_data(f_name: str) -> np.ndarray:
-    """
-    Load CCD frames from an HDF5 file and drop the first three columns.
+    """Load CCD frames from an HDF5 file and drop the first three columns.
 
-    The dataset is assumed to follow the Princeton FrameV2 structure used in this
-    project. If adapting to a different source, adjust the HDF5 path below and
-    revisit the column-drop convention.
+    Assumes the Princeton FrameV2 layout used in this project. If adapting to a
+    different source, adjust the HDF5 path below and revisit the column drop.
 
-    Returns
-    
-    stack : np.ndarray, shape (N, H, W)
-        Stack of frames, with the first three columns removed.
+    Args:
+        f_name: Path to the HDF5 file.
+
+    Returns:
+        Stack of frames, shape (N, H, W), with the first three columns removed.
     """
     path = Path(f_name)
     if not path.exists():
@@ -104,14 +97,14 @@ def load_image_data(f_name: str) -> np.ndarray:
 
     frames: list[np.ndarray] = []
     with h5py.File(str(path), "r") as f:
-        for i in itertools.count(start=0):
+        for i in itertools.count():
             node = f.get(
                 f"Configure:0000/Run:0000/CalibCycle:{i:04d}/"
                 "Princeton::FrameV2/SxrEndstation.0:Princeton.0/data"
             )
             if node is None:
                 break
-            # Drop first 3 columns (dataset-specific spike/edge artefacts).
+            # first 3 columns hold dataset-specific spike/edge artefacts
             frames.append(node[0][:, 3:])
 
     stack = np.asarray(frames, dtype=np.float64)
@@ -120,10 +113,8 @@ def load_image_data(f_name: str) -> np.ndarray:
     return stack
 
 
-##################################
-#            Pipeline            # 
-##################################
 def main() -> None:
+    """Run the full pipeline and write the lineout CSV and figure to outputs/."""
     cfg = CONFIG
     setup_logging(cfg["LOG_LEVEL"])
     log = logging.getLogger("xspeds.run")
@@ -140,76 +131,57 @@ def main() -> None:
     log.info("Loaded stack: shape=%s (frames, rows, cols)", stack.shape)
 
     # CLEANING + CLUSTERING (SPC)
-    # Gaussian pedestal fit per row-batch - dynamic threshold - BFS-style clustering.
-    scrub_cfg = ScrubConfig()
-    cl_res = run_cleaning_and_clustering(stack, scrub=scrub_cfg)
-   
-
-    photon_maps, cluster_meta = cl_res.as_tuple()
-    total_clusters = sum(len(d) for d in cluster_meta)
-    log.info("Clustering complete: frames=%d, total_clusters=%d",
-             len(photon_maps), total_clusters)
+    cl_res = run_cleaning_and_clustering(stack, scrub=ScrubConfig())
+    photon_maps = cl_res.photon_maps
+    total_clusters = sum(len(d) for d in cl_res.clusters)
+    log.info("Clustering complete: frames=%d, total_clusters=%d", len(photon_maps), total_clusters)
 
     # MAPPING (instrument calibration)
-    # Fit geometry + mapping offsets from two reference ridge regions.
-    map_cfg = MappingConfig(
-        frame_index=cfg["MAP_FRAME_INDEX"],
-        alpha1_deg=cfg["MAP_ALPHA1_DEG"],
-        alpha2_deg=cfg["MAP_ALPHA2_DEG"],
+    map_out = run_mapping(
+        stack,
+        config=MappingConfig(
+            frame_index=cfg["MAP_FRAME_INDEX"],
+            alpha1_deg=cfg["MAP_ALPHA1_DEG"],
+            alpha2_deg=cfg["MAP_ALPHA2_DEG"],
+        ),
     )
-
-
-    map_out = run_mapping(stack, config=map_cfg)
-
-
-    (d_opt, theta_z_opt, C1_opt, b_opt, shift_part_1) = map_out.as_tuple()
     log.info(
-        "Mapping parameters: d=%.4g, θz=%.3f° , C1=%.4g px, b=%.4g px, shift=%.4g px",
-        d_opt, float(np.rad2deg(theta_z_opt)), C1_opt, b_opt, shift_part_1
+        "Mapping parameters: d=%.4g, theta_z=%.3f deg, C1=%.4g px, b=%.4g px, shift=%.4g px",
+        map_out.d, float(np.rad2deg(map_out.theta_z)), map_out.C1, map_out.b, map_out.shift,
     )
 
     # SPECTRAL LINEOUT
-    # Sum along iso-energy conics and normalize by local eV window width.
-    out_dir.mkdir(parents=True, exist_ok=True)
-    lcfg = LineoutConfig(
-        energy_min=cfg["E_MIN"],
-        energy_max=cfg["E_MAX"],
-        energy_step=cfg["E_STEP"],
-        tolerance=cfg["TOLERANCE_PX"],
-        frame_index=cfg["LINEOUT_FRAME"],
-        yscale=cfg["Y_SCALE"],
-        save_fig_path=str(out_dir / "lineout.png"),
+    lineout = run_lineout(
+        photon_maps,
+        map_out.d, map_out.theta_z, map_out.C1, map_out.b, map_out.shift,
+        config=LineoutConfig(
+            energy_min=cfg["E_MIN"],
+            energy_max=cfg["E_MAX"],
+            energy_step=cfg["E_STEP"],
+            tolerance=cfg["TOLERANCE_PX"],
+            frame_index=cfg["LINEOUT_FRAME"],
+            yscale=cfg["Y_SCALE"],
+            save_fig_path=str(out_dir / "lineout.png"),
+        ),
     )
+    lineout.to_dataframe().to_csv(out_dir / "lineout.csv", index=False)
 
-    _lineout = run_lineout(
-        photon_maps, d_opt, theta_z_opt, C1_opt, b_opt, shift_part_1, config=lcfg
-    )
-
-    _lineout.to_dataframe().to_csv(out_dir / "lineout.csv", index=False)
-
-
-
-    energies = _lineout.energies
-    intensity = _lineout.intensity
+    # PEAK METRICS (L-alpha at ~1188 eV)
     metrics = compute_peak_metrics(
-        energies, intensity,
+        lineout.energies,
+        lineout.intensity,
         peak_window=(1180.0, 1196.0),
         mor_half_window=30,
         mor_smooth_hw=30,
-        gauss_limit_fwhm=1.5
+        gauss_limit_fwhm=1.5,
     )
-
     log.info(
         "Peak 1188 eV fit: mu=%.3f eV, sigma=%.3f eV, FWHM=%.3f eV, SNR=%.1f",
-        metrics["mu"], metrics["sigma"], metrics["FWHM"], metrics["SNR"]
+        metrics["mu"], metrics["sigma"], metrics["FWHM"], metrics["SNR"],
     )
 
-
-
-    dt = time.perf_counter() - t0
-    log.info("Pipeline finished in %.2fs", dt)
+    log.info("Pipeline finished in %.2fs", time.perf_counter() - t0)
 
 
 if __name__ == "__main__":
     main()
-

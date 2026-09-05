@@ -1,64 +1,47 @@
-# TODO: add more comments
 """
 Cleaning and clustering stage of the XSPEDS algorithm.
 
 Removes CCD background noise via Gaussian pedestal fitting and dynamic thresholding,
-then identifies photon clusters (single pixel, lines, L-shapes, 2×2 boxes).
+then identifies photon clusters (single pixel, lines, L-shapes, 2x2 boxes).
 
-Produces:
-- scrubbed frames
-- per-frame cluster metadata
-- per-frame photon maps (1 = centroid, 2 = large/irregular clusters)
+Produces per-frame photon maps (1 = centroid, 2 = large/irregular clusters)
+and per-frame cluster metadata.
 
-Example
-from cleaning_and_clustering import ScrubConfig, run_cleaning_and_clustering
+Example:
+    from cleaning_and_clustering import ScrubConfig, run_cleaning_and_clustering
 
-scrub = ScrubConfig(row_batch_size=5, k_low=1.0, k_high=5.0)
-result = run_cleaning_and_clustering(stack, scrub=scrub)
-photon_maps, clusters = result.as_tuple()
-
+    result = run_cleaning_and_clustering(stack, scrub=ScrubConfig())
+    photon_maps, clusters = result.photon_maps, result.clusters
 """
 
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Literal, Sequence, Tuple
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import curve_fit
 
-
-#  Public types
-
 Shape = Literal["single", "line2", "line3", "lshape3", "box4", "other"]
-ClustersDict = Dict[int, Dict[str, object]]  # cluster_no -> cluster info
+ClustersDict = dict[int, dict[str, object]]  # cluster_no -> cluster info
 
-
-#  Configuration 
 
 @dataclass(frozen=True)
 class ScrubConfig:
-    """
-    Configuration for pedestal fitting and dynamic thresholding.
+    """Configuration for pedestal fitting and dynamic thresholding.
 
-    Parameters
-    
-    row_batch_size : 
-        Number of image rows per batch for histogram/fit (e.g., 5).
-    k_low : Lower bound (in σ) for threshold search window [μ + k_low σ, μ + k_high σ].
-    k_high : 
-        Upper bound (in σ) for threshold search window.
-    fallback_sigma_k : float
-        If fit/search is unstable, fallback threshold = μ + fallback_sigma_k σ.
-    min_bins : 
-        Minimum histogram bin count for the batch histogram.
-    max_bins : 
-        Maximum histogram bin count for the batch histogram.
-    other_flag_threshold : 
-        If a cluster is classified as "other" and its max_value exceeds this,
-        mark its centroid as 2 in the photon map -see paper
+    Args:
+        row_batch_size: Number of image rows per batch for the histogram fit.
+        k_low: Lower bound (in sigma) of the threshold search window [mu + k_low*sigma, mu + k_high*sigma].
+        k_high: Upper bound (in sigma) of the threshold search window.
+        fallback_sigma_k: If the Gaussian fit fails, use threshold = mu + fallback_sigma_k*sigma.
+        min_bins: Minimum histogram bin count per batch.
+        max_bins: Maximum histogram bin count per batch.
+        other_flag_threshold: Clusters classified "other" with max_value above this
+            get their centroid marked 2 in the photon map (see paper).
     """
     row_batch_size: int = 5
     k_low: float = 1.0
@@ -66,49 +49,53 @@ class ScrubConfig:
     fallback_sigma_k: float = 3.0
     min_bins: int = 16
     max_bins: int = 256
-    other_flag_threshold: float = 90.0  
+    other_flag_threshold: float = 90.0
 
 
 @dataclass(frozen=True)
 class ClusteringResult:
-    """Outputs of cleaning + clustering."""
-    photon_maps: List[NDArray[np.int_]]   # list of (H, W)
-    clusters: List[ClustersDict]          # list of dicts
+    """Outputs of cleaning + clustering.
 
-    def as_tuple(self):
-        """Back-compat: return exactly what the old code expects."""
-        return self.photon_maps, self.clusters
+    Args:
+        photon_maps: One (H, W) int map per frame.
+        clusters: One metadata dict per frame.
+    """
+    photon_maps: list[NDArray[np.int_]]
+    clusters: list[ClustersDict]
+
 
 #############################
 #        Utilities          #
 #############################
 
-def _scotts_rule_bins(batch: NDArray[np.float64], *, min_bins: int, max_bins: int) -> int:
+def _scotts_rule_bins(batch: NDArray[np.float64], min_bins: int, max_bins: int) -> int:
+    """Histogram bin count via Scott's rule, clipped to [min_bins, max_bins].
+
+    NB for these datasets the raw rule usually lands below min_bins, so the
+    clip is what matters in practice.
+
+    Args:
+        batch: Flattened pixel values for one row batch.
+        min_bins: Lower clip.
+        max_bins: Upper clip.
+
+    Returns:
+        Bin count to use for the batch histogram.
     """
-    Compute a histogram bin count using Scott’s rule, clipped to [min_bins, max_bins].
-    NB in the examples, not typically needed as it returns 1 usually (left over from previous histogram-based threshold search).
-    """
-    x = batch
-    n = max(int(x.size), 1)
-    sigma = float(np.std(x)) if n > 1 else 0.0  # Scott’s rule uses σ
-    if sigma <= 0.0:
-        return min_bins  # degenerate case
-    bin_w = (3.5 * sigma) / (n ** (1.0 / 3.0))
-    if bin_w <= 0:
+    sigma = float(np.std(batch)) if batch.size > 1 else 0.0
+    data_range = float(np.max(batch) - np.min(batch)) if batch.size else 0.0
+    if sigma <= 0.0 or data_range <= 0.0:
         return min_bins
-    data_range = float(np.max(x) - np.min(x))
-    if data_range <= 0:
-        return min_bins
-    bins = int(max(round(data_range / bin_w), 1))
+    bin_w = 3.5 * sigma / (batch.size ** (1.0 / 3.0))
+    bins = max(round(data_range / bin_w), 1)
     return int(np.clip(bins, min_bins, max_bins))
 
 
 def _gauss(x: NDArray[np.float64], amp: float, mu: float, sigma: float) -> NDArray[np.float64]:
-    
-    # Simple Gaussian model used for pedestal fitting.
-    
-    sigma = abs(float(sigma)) + 1e-12  # guard against negative/zero - well hopefully nothing is inputted on this order
+    """Gaussian model for the pedestal fit."""
+    sigma = abs(float(sigma)) + 1e-12  # guard against zero width during fitting
     return amp * np.exp(-((x - mu) ** 2) / (2.0 * sigma * sigma))
+
 
 #####################################
 #       Cleaning / Scrubbing        #
@@ -123,134 +110,128 @@ def scrubbing(
     min_bins: int = 16,
     max_bins: int = 256,
     fallback_sigma_k: float = 3.0,
-) -> List[NDArray[np.float64]]:
-    """
-    Fit a Gaussian pedestal per row-batch and dynamically threshold each batch.
+) -> list[NDArray[np.float64]]:
+    """Fit a Gaussian pedestal per row batch and zero everything below a dynamic threshold.
 
-    Parameters:
-    image_data: 
-        Sequence of 2D arrays (each frame is H×W, dtype float-like ADU).
-    size_rows: 
-        Number of rows per batch for histogram/fit (e.g., 5).
-    lower_bound, upper_bound: 
-        Bounds (in σ) for the threshold search window.
-    min_bins, max_bins: 
-        Bounds on histogram bin count.
-    fallback_sigma_k: 
-        Fallback multiplier k for threshold = μ + k σ when fit/search unstable.
+    The threshold is the bin centre in [mu + k_low*sigma, mu + k_high*sigma] where the
+    observed counts are closest to twice the fitted Gaussian prediction. If the fit
+    fails the batch falls back to mu + fallback_sigma_k*sigma from sample moments.
+
+    Args:
+        image_data: Sequence of 2D frames (H x W, ADU values).
+        size_rows: Rows per batch for the histogram fit.
+        lower_bound: k_low of the search window (in sigma).
+        upper_bound: k_high of the search window (in sigma).
+        min_bins: Lower clip on histogram bin count.
+        max_bins: Upper clip on histogram bin count.
+        fallback_sigma_k: Multiplier for the fallback threshold.
 
     Returns:
-        Scrubbed image data (same shapes as input), background set to zero.
+        Scrubbed frames (same shapes as input) with background set to zero.
     """
     if size_rows <= 0:
         raise ValueError("size_rows must be positive.")
     if upper_bound <= lower_bound:
         raise ValueError("upper_bound must be greater than lower_bound.")
 
-    scrubbed_frames: List[NDArray[np.float64]] = []
+    scrubbed_frames: list[NDArray[np.float64]] = []
 
     for frame in image_data:
-        if frame.ndim != 2:
-            raise ValueError("Each item in image_data must be a 2D array.")
         f = frame.copy()
+        H = f.shape[0]
 
-        H, _ = f.shape
         for r0 in range(0, H, size_rows):
             r1 = min(r0 + size_rows, H)  # include last partial batch
             batch = f[r0:r1, :].ravel().astype(np.float64, copy=False)
 
-            # Histogram (Scott's rule, with sane bounds)
-            bins = _scotts_rule_bins(batch, min_bins=min_bins, max_bins=max_bins)
+            bins = _scotts_rule_bins(batch, min_bins, max_bins)
             counts, edges = np.histogram(batch, bins=bins)
             centers = 0.5 * (edges[:-1] + edges[1:])
 
-            # Fit Gaussian to pedestal
-            p0 = [float(np.max(counts) if counts.size else 1.0),
-                  float(np.mean(batch)),
-                  float(np.std(batch) + 1e-6)]
+            p0 = [float(np.max(counts)), float(np.mean(batch)), float(np.std(batch) + 1e-6)]
             try:
                 (amp, mu, sigma), _ = curve_fit(_gauss, centers, counts, p0=p0, maxfev=2000)
                 sigma = abs(float(sigma)) + 1e-12
                 fit_ok = True
-            except Exception:
-                # Degenerate/unstable fit; go back to moments
-                mu = float(np.mean(batch))
-                sigma = float(np.std(batch) + 1e-6)
-                amp = float(np.max(counts)) if counts.size else 1.0
+            except RuntimeError:
+                mu, sigma = p0[1], p0[2]
                 fit_ok = False
 
-            # Threshold rule: pick V in [μ + k_low σ, μ + k_high σ] where counts ≈ 2 × fitted
-            lower_v = mu + lower_bound * sigma
-            upper_v = mu + upper_bound * sigma
-
-            mask = (centers >= lower_v) & (centers <= upper_v)
+            # Pick the bin centre in the window where counts are closest to 2x the fit
+            mask = (centers >= mu + lower_bound * sigma) & (centers <= mu + upper_bound * sigma)
             if fit_ok and np.any(mask):
                 pred = _gauss(centers, amp, mu, sigma)
-                # choose bin center where abs(observed - 2*predicted) is minimized
-                diffs = np.abs(counts[mask] - 2.0 * pred[mask])
-                idx_local = int(np.argmin(diffs))
-                threshold = float(centers[mask][idx_local])
+                idx = int(np.argmin(np.abs(counts[mask] - 2.0 * pred[mask])))
+                threshold = float(centers[mask][idx])
             else:
-                # Fallback: μ + k σ
                 threshold = float(mu + fallback_sigma_k * sigma)
 
-            # Apply threshold to the batch slice
             f[r0:r1, :] = np.where(f[r0:r1, :] < threshold, 0.0, f[r0:r1, :])
 
         scrubbed_frames.append(f)
 
     return scrubbed_frames
 
+
 ##########################
 #      Clustering        #
 ##########################
 
-# Canonical shape templates (in local coords anchored at min(r), min(c))
-SINGLE = [{(0, 0)}]
-LINE_TWO = [{(0, 0), (0, 1)}, {(0, 0), (1, 0)}]
-LINE_THREE = [{(0, 0), (0, 1), (0, 2)}, {(0, 0), (1, 0), (2, 0)}]
-L_SHAPE = [
-    {(0, 0), (1, 0), (1, 1)},
-    {(0, 1), (1, 1), (1, 0)},
-    {(0, 0), (0, 1), (1, 0)},
-    {(0, 0), (0, 1), (1, 1)},
-]
-BOX = [{(0, 0), (0, 1), (1, 0), (1, 1)}]
+# Canonical shape templates, anchored at (min row, min col)
+_TEMPLATES: dict[frozenset[tuple[int, int]], Shape] = {
+    frozenset({(0, 0)}): "single",
+    frozenset({(0, 0), (0, 1)}): "line2",
+    frozenset({(0, 0), (1, 0)}): "line2",
+    frozenset({(0, 0), (0, 1), (0, 2)}): "line3",
+    frozenset({(0, 0), (1, 0), (2, 0)}): "line3",
+    frozenset({(0, 0), (1, 0), (1, 1)}): "lshape3",
+    frozenset({(0, 1), (1, 1), (1, 0)}): "lshape3",
+    frozenset({(0, 0), (0, 1), (1, 0)}): "lshape3",
+    frozenset({(0, 0), (0, 1), (1, 1)}): "lshape3",
+    frozenset({(0, 0), (0, 1), (1, 0), (1, 1)}): "box4",
+}
+
+
+def _identify_shape(coords: set[tuple[int, int]]) -> Shape:
+    """Classify a cluster by matching its normalised footprint against the templates.
+
+    Args:
+        coords: Pixel coordinates of one cluster.
+
+    Returns:
+        Shape label, "other" if no template matches.
+    """
+    min_r = min(r for r, _ in coords)
+    min_c = min(c for _, c in coords)
+    norm = frozenset((r - min_r, c - min_c) for r, c in coords)
+    return _TEMPLATES.get(norm, "other")
 
 
 def detect_clusters(
     image: NDArray[np.float64],
     *,
-    other_flag_threshold: float = 90.0
-) -> Tuple[ClustersDict, NDArray[np.int_]]:
+    other_flag_threshold: float = 90.0,
+) -> tuple[ClustersDict, NDArray[np.int_]]:
+    """Find 4-connected clusters, classify their shapes, and build the photon map.
+
+    Args:
+        image: 2D scrubbed frame (H x W), background pixels are zero.
+        other_flag_threshold: If shape is "other" and max_value exceeds this,
+            mark the centroid as 2 instead of dropping the cluster.
+
+    Returns:
+        clusters: Mapping cluster_no -> info dict with keys
+            'coords' (set of (r, c)), 'shape', 'max_value', 'values',
+            'sum', 'centroid' (position of the max pixel).
+        centroid_map: (H x W) int array, 1 = photon centroid, 2 = large/irregular, 0 = background.
     """
-    Identify 4-connected clusters, classify simple shapes, and return a photon map.
-
-    Parameters
-    image: 
-        2D scrubbed NumPy array (H×W), where background pixels are zero.
-    other_flag_threshold: 
-        If shape=='other' and max_value > this threshold, mark the centroid as 2.
-
-    Returns
-    clusters_dict: 
-        Mapping from cluster number to cluster info dict with keys:
-            'coords': set[(r, c)]
-            'shape': {'single','line2','line3','lshape3','box4','other'}
-            'max_value': float
-            'values': list[float]
-            'sum': float
-            'centroid': (r, c)
-    centroid_map :
-        2D int array (H×W): 1 = centroid; 2 = large/irregular; 0 = background.
-    """
-    if image.ndim != 2:
-        raise ValueError("image must be a 2D array.")
-
     H, W = image.shape
     visited = np.zeros_like(image, dtype=bool)
+    centroid_map = np.zeros_like(image, dtype=int)
+    clusters: ClustersDict = {}
+    cluster_no = 0
 
-    def neighbors(r: int, c: int) -> Iterable[Tuple[int, int]]:
+    def neighbors(r: int, c: int) -> Iterator[tuple[int, int]]:
         if r > 0:
             yield (r - 1, c)
         if r + 1 < H:
@@ -260,29 +241,6 @@ def detect_clusters(
         if c + 1 < W:
             yield (r, c + 1)
 
-    def identify_shape(coords_set: set[Tuple[int, int]]) -> Shape:
-        # Normalize to top-left origin to compare with templates
-        min_r = min(r for r, _ in coords_set)
-        min_c = min(c for _, c in coords_set)
-        norm = {(r - min_r, c - min_c) for (r, c) in coords_set}
-        size = len(norm)
-
-        if size == 1 and norm in SINGLE:
-            return "single"
-        if size == 2 and norm in LINE_TWO:
-            return "line2"
-        if size == 3:
-            if norm in LINE_THREE:
-                return "line3"
-            if norm in L_SHAPE:
-                return "lshape3"
-        if size == 4 and norm in BOX:
-            return "box4"
-        return "other"
-
-    clusters: ClustersDict = {}
-    cluster_no = 0
-
     for i in range(H):
         for j in range(W):
             if image[i, j] == 0 or visited[i, j]:
@@ -290,9 +248,9 @@ def detect_clusters(
 
             # BFS to collect one cluster
             cluster_no += 1
-            q: deque[Tuple[int, int]] = deque([(i, j)])
+            q: deque[tuple[int, int]] = deque([(i, j)])
             visited[i, j] = True
-            coords: List[Tuple[int, int]] = []
+            coords: list[tuple[int, int]] = []
 
             while q:
                 r, c = q.popleft()
@@ -302,37 +260,26 @@ def detect_clusters(
                         visited[rr, cc] = True
                         q.append((rr, cc))
 
-            coords_set = set(coords)
-            shape = identify_shape(coords_set)
-            values = [float(image[r, c]) for (r, c) in coords_set]
-            max_coord = max(coords_set, key=lambda rc: image[rc])
-            max_val = float(image[max_coord])
+            shape = _identify_shape(set(coords))
+            values = [float(image[rc]) for rc in coords]
+            centroid = coords[int(np.argmax(values))]
+            max_val = float(image[centroid])
+
             clusters[cluster_no] = {
-                "coords": coords_set,
+                "coords": set(coords),
                 "shape": shape,
                 "max_value": max_val,
                 "values": values,
                 "sum": float(sum(values)),
-                "centroid": max_coord,
+                "centroid": centroid,
             }
 
-    # Build centroid map
-    centroid_map = np.zeros_like(image, dtype=int)
-    for info in clusters.values():
-        r, c = info["centroid"]  # type: ignore[index]
-        shape: str = info["shape"]  # type: ignore[assignment]
-        max_val: float = info["max_value"]  # type: ignore[assignment]
-        if shape != "other":
-            if 0 <= r < H and 0 <= c < W:
-                centroid_map[r, c] = 1
-        else:
-            if max_val > other_flag_threshold and 0 <= r < H and 0 <= c < W:
-                centroid_map[r, c] = 2
+            if shape != "other":
+                centroid_map[centroid] = 1
+            elif max_val > other_flag_threshold:
+                centroid_map[centroid] = 2
 
     return clusters, centroid_map
-
-# Back-compat alias so external code doesn’t break if it used the old name
-cluster_detecting = detect_clusters
 
 
 ##################################
@@ -344,17 +291,14 @@ def run_cleaning_and_clustering(
     *,
     scrub: ScrubConfig,
 ) -> ClusteringResult:
-    """
-    Scrub a stack of images and detect clusters, producing photon maps and cluster metadata.
+    """Scrub a stack of frames and detect clusters in each.
 
-    Parameters:
-    image_data : sequence of 2D NumPy arrays (each frame H×W)
-    scrub : ScrubConfig
-        Centralized configuration for pedestal fit, threshold search, and flags.
+    Args:
+        image_data: Sequence of 2D frames (H x W).
+        scrub: Configuration for pedestal fit, threshold search, and flags.
 
     Returns:
-    ClusteringResult
-        .photon_maps (list of H×W int arrays) and .clusters (list of dicts).
+        ClusteringResult with one photon map and one cluster dict per frame.
     """
     scrubbed = scrubbing(
         image_data,
@@ -366,14 +310,10 @@ def run_cleaning_and_clustering(
         fallback_sigma_k=scrub.fallback_sigma_k,
     )
 
-    photon_maps: List[NDArray[np.int_]] = []
-    cluster_info: List[ClustersDict] = []
-
+    photon_maps: list[NDArray[np.int_]] = []
+    cluster_info: list[ClustersDict] = []
     for frame in scrubbed:
-        clusters, pmap = detect_clusters(
-            frame,
-            other_flag_threshold=scrub.other_flag_threshold
-        )
+        clusters, pmap = detect_clusters(frame, other_flag_threshold=scrub.other_flag_threshold)
         photon_maps.append(pmap)
         cluster_info.append(clusters)
 
