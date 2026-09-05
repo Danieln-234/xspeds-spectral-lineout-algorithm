@@ -38,7 +38,8 @@ End‑to‑end pipeline for converting raw CCD frames (HDF5) into a counts‑per
   The first three columns are dropped to remove edge artefacts.
 
 - **Output:**  
-  Energy spectrum (counts / eV) and an optional figure with Wiener-smoothed uncertainty bands.
+  Energy spectrum (counts / eV) as CSV plus a figure with Wiener-smoothed uncertainty bands,  
+  both written to `outputs/<run_id>/`.
 
 - **Core idea:**  
   Use the two known germanium Lα and Lβ ridge peaks to fit the detector geometry,  
@@ -64,8 +65,13 @@ The main algorithm and functionality were completed in April 2025 as part of my 
 Subsequent commits involve only formatting, documentation, and readability improvements. The underlying logic and results remain unchanged from the original implementation.
 
 **Validation and testing:**  
-The project focused on scientific and algorithmic validation (benchmark spectra, SNR, FWHM checks) rather than formal unit testing, as the goal was to verify physical accuracy rather than production robustness.  
-In a production or data-pipeline setting, lightweight unit tests (e.g. for geometry fitting and thresholding) could be added for reproducibility.
+The scientific validation (benchmark spectra, SNR, FWHM checks) is described in the report.  
+A lightweight `pytest` suite covers the fast deterministic pieces: shape classification and thresholding
+on synthetic frames, the cone–plane conic algebra, ridge peak finding, and peak-metric recovery of a
+known synthetic Gaussian. Run it with:
+```bash
+pytest tests
+```
 
 ---
 
@@ -74,7 +80,7 @@ In a production or data-pipeline setting, lightweight unit tests (e.g. for geome
 
 **Requirements:**
 
-`numpy`, `scipy`, `h5py`, `matplotlib`, `pybaselines`
+`numpy`, `scipy`, `pandas`, `h5py`, `matplotlib`, `pybaselines`
 
 All dependencies are also listed in `requirements.txt`; install via:
 ```bash
@@ -106,7 +112,7 @@ Reads frames from the HDF5 tree into a `(N, H, W)` stack (`float64`) and drops t
 - **BFS‑style clustering:** identify photon shapes (1–4 pixels typical) and collect per‑frame **photon maps** plus **cluster metadata**.
 
 ### 3) Mapping (instrument calibration)
-- **Ridge extraction:** across row batches, sum columns and detect two reference ridges (e.g., Ge Lα & Lβ), smoothed with a Gaussian filter (`MAP_SMOOTH_SIGMA`).
+- **Ridge extraction:** across row batches, sum columns and detect two reference ridges (e.g., Ge Lα & Lβ), smoothed with a Gaussian filter (`MappingConfig.smooth_sigma`).
 - **Conic geometry:** photons of energy \(E\) form a cone (half‑angle derived from Bragg’s law). Intersection with a tilted CCD plane yields conics (ellipse/hyperbola); near the vertex they are well approximated by parabolas.
 - **Parameter fit:** fit parabolas to both ridges and solve for distance **d** and tilt **θ_z** by minimizing (1) scatter residuals, (2) **focal‑length residual** via \(F=1/4A\), and (3) **vertex‑gap residual**. Uses global **differential evolution** with an optional seed, followed by local least‑squares.
 
@@ -132,9 +138,21 @@ Reads frames from the HDF5 tree into a `(N, H, W)` stack (`float64`) and drops t
 
 ---
 
+## Code layout
+
+| File | Role |
+|---|---|
+| `run.py` | Pipeline runner and config; writes CSV + figure to `outputs/<run_id>/` |
+| `cleaning_and_clustering.py` | Pedestal fit, dynamic thresholding, photon clustering |
+| `mapping.py` | Ridge extraction and geometry fit (DE + least squares) |
+| `lineout.py` | Iso-energy conic summation, normalisation, peak metrics |
+| `geometry.py` | Cone–plane conic math shared by mapping and lineout |
+
+---
+
 ## Outputs
 
 - **Console log:** geometry fit, counts summary, Lα FWHM and SNR, runtime.
-- **Figure (optional):** spectrum with ±k·σ bands; save via `SAVE_FIG_PATH`.
+- **Files:** `outputs/<run_id>/lineout.csv` and `lineout.png` (spectrum with ±k·σ bands).
 
 ---

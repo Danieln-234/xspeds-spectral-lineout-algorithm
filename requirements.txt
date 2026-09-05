@@ -4,3 +4,4 @@ pandas
 h5py
 matplotlib
 pybaselines
+pytest
