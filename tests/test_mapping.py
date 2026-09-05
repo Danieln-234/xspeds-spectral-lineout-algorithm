@@ -1,10 +1,10 @@
-"""Tests for ridge extraction and its uncertainty estimate."""
+﻿"""Tests for ridge extraction and its uncertainty estimate."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from mapping import _sigma_from_peak_curvature, find_scatter_peaks
+from xspeds.mapping import _sigma_from_peak_curvature, find_scatter_peaks
 
 
 def test_find_scatter_peaks_locates_ridges() -> None:

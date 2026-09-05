@@ -1,0 +1,31 @@
+[project]
+name = "xspeds"
+version = "1.0.0"
+description = "X-ray single-photon energy-dispersive spectroscopy: CCD frames to counts-per-eV spectra"
+readme = "README.md"
+authors = [{ name = "Daniel Narain" }]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "h5py",
+    "matplotlib",
+    "pybaselines",
+]
+
+[project.scripts]
+xspeds = "xspeds.run:main"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+    "pytest",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,10 +1,10 @@
-"""Tests for the shared cone-plane geometry."""
+﻿"""Tests for the shared cone-plane geometry."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from geometry import conic_coefficients, rotated_basis
+from xspeds.geometry import conic_coefficients, rotated_basis
 
 
 def test_rotated_basis_is_orthonormal() -> None:

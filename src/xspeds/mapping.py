@@ -18,7 +18,7 @@ from numpy.typing import NDArray
 from scipy.ndimage import gaussian_filter1d
 from scipy.optimize import differential_evolution, least_squares
 
-from geometry import conic_coefficients, rotated_basis
+from xspeds.geometry import conic_coefficients, rotated_basis
 
 logger = logging.getLogger("xspeds.mapping")
 if not logger.handlers:

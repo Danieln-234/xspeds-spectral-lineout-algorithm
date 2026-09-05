@@ -70,7 +70,7 @@ A lightweight `pytest` suite covers the fast deterministic pieces: shape classif
 on synthetic frames, the cone–plane conic algebra, ridge peak finding, and peak-metric recovery of a
 known synthetic Gaussian. Run it with:
 ```bash
-pytest tests
+uv run pytest
 ```
 
 ---
@@ -78,14 +78,17 @@ pytest tests
 
 
 
-**Requirements:**
+**Installation and running:**
 
-`numpy`, `scipy`, `pandas`, `h5py`, `matplotlib`, `pybaselines`
-
-All dependencies are also listed in `requirements.txt`; install via:
+The project is packaged with [uv](https://docs.astral.sh/uv/); from the repo root:
 ```bash
-pip install -r requirements.txt
+uv sync          # creates the environment from uv.lock
+uv run xspeds    # runs the pipeline on the bundled dataset
+uv run xspeds my_data.h5   # or on another file
 ```
+
+Without uv, install the dependencies (`numpy`, `scipy`, `pandas`, `h5py`, `matplotlib`, `pybaselines`)
+via `pip install -r requirements.txt` and run `python -m xspeds.run` after `pip install -e .`.
 
 ## Data expectations
 
@@ -142,11 +145,12 @@ Reads frames from the HDF5 tree into a `(N, H, W)` stack (`float64`) and drops t
 
 | File | Role |
 |---|---|
-| `run.py` | Pipeline runner and config; writes CSV + figure to `outputs/<run_id>/` |
-| `cleaning_and_clustering.py` | Pedestal fit, dynamic thresholding, photon clustering |
-| `mapping.py` | Ridge extraction and geometry fit (DE + least squares) |
-| `lineout.py` | Iso-energy conic summation, normalisation, peak metrics |
-| `geometry.py` | Cone–plane conic math shared by mapping and lineout |
+| `src/xspeds/run.py` | Pipeline runner and config; writes CSV + figure to `outputs/<run_id>/` |
+| `src/xspeds/cleaning_and_clustering.py` | Pedestal fit, dynamic thresholding, photon clustering |
+| `src/xspeds/mapping.py` | Ridge extraction and geometry fit (DE + least squares) |
+| `src/xspeds/lineout.py` | Iso-energy conic summation, normalisation, peak metrics |
+| `src/xspeds/geometry.py` | Cone–plane conic math shared by mapping and lineout |
+| `tests/` | Pytest suite over the deterministic building blocks |
 
 ---
 

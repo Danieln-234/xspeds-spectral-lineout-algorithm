@@ -1,4 +1,4 @@
-"""Tests for the cleaning and clustering stage on small synthetic frames."""
+﻿"""Tests for the cleaning and clustering stage on small synthetic frames."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from cleaning_and_clustering import detect_clusters, scrubbing
+from xspeds.cleaning_and_clustering import detect_clusters, scrubbing
 
 
 @pytest.fixture

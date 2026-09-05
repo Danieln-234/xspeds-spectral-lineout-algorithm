@@ -1,11 +1,11 @@
-"""Tests for the lineout building blocks and peak metrics."""
+﻿"""Tests for the lineout building blocks and peak metrics."""
 
 from __future__ import annotations
 
 import numpy as np
 from numpy.typing import NDArray
 
-from lineout import _alpha_from_energy, _horizontal_boxsum, compute_peak_metrics
+from xspeds.lineout import _alpha_from_energy, _horizontal_boxsum, compute_peak_metrics
 
 
 def test_alpha_energy_roundtrip() -> None:

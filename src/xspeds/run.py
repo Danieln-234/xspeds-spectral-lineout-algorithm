@@ -27,6 +27,7 @@ Pipeline stages:
 
 from __future__ import annotations
 
+import argparse
 import itertools
 import logging
 import time
@@ -36,9 +37,9 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from cleaning_and_clustering import ScrubConfig, run_cleaning_and_clustering
-from lineout import LineoutConfig, compute_peak_metrics, run_lineout
-from mapping import MappingConfig, run_mapping
+from xspeds.cleaning_and_clustering import ScrubConfig, run_cleaning_and_clustering
+from xspeds.lineout import LineoutConfig, compute_peak_metrics, run_lineout
+from xspeds.mapping import MappingConfig, run_mapping
 
 # Config for the run; the most important knobs are E_STEP, TOLERANCE_PX,
 # and the frame index for the lineout
@@ -115,6 +116,15 @@ def load_image_data(f_name: str) -> np.ndarray:
 
 def main() -> None:
     """Run the full pipeline and write the lineout CSV and figure to outputs/."""
+    parser = argparse.ArgumentParser(description="Run the XSPEDS pipeline on an HDF5 CCD dataset.")
+    parser.add_argument(
+        "input_file",
+        nargs="?",
+        default=CONFIG["INPUT_FILE"],
+        help="HDF5 file to process (default: %(default)s)",
+    )
+    args = parser.parse_args()
+
     cfg = CONFIG
     setup_logging(cfg["LOG_LEVEL"])
     log = logging.getLogger("xspeds.run")
@@ -127,7 +137,7 @@ def main() -> None:
     t0 = time.perf_counter()
 
     # LOAD
-    stack = load_image_data(cfg["INPUT_FILE"])
+    stack = load_image_data(args.input_file)
     log.info("Loaded stack: shape=%s (frames, rows, cols)", stack.shape)
 
     # CLEANING + CLUSTERING (SPC)

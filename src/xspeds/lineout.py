@@ -26,7 +26,7 @@ from scipy.ndimage import convolve1d
 from scipy.optimize import curve_fit
 from scipy.signal import wiener
 
-from geometry import conic_coefficients, rotated_basis
+from xspeds.geometry import conic_coefficients, rotated_basis
 
 logger = logging.getLogger("xspeds.lineout")
 if not logger.handlers:
